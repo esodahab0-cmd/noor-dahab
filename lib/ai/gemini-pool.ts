@@ -1,24 +1,16 @@
-// Gemini API Multi-Key Rotation Pool
-// Keys are loaded from environment or encoded pool
-const rawKeys = process.env.GEMINI_KEYS_POOL 
-  ? process.env.GEMINI_KEYS_POOL.split(',') 
-  : [
-      Buffer.from("QVEuQWI4Uk42SWJiQm5BOTNobHpHdWVEdWh2cHFRTEtTZmlrMHlHcTNJOFdsYzFGcWdsUQ==", "base64").toString("utf-8"),
-      Buffer.from("QVEuQWI4Uk42SmExX2VVOEo1WDFEZWFhRWhsRWtabWpCWXRCVlJDWEhiUzgxb3N5WllXSGc=", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5QnhZSTdycGFrOGlZV2tyQWg3UHk0cjQ5WU1MeFQxREZB", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5RE1SZkdmbGtWSVZ2NldXck1jVFRhUFdmeVAxVkplZDlj", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5Q0Z2YWMwY2pyOG1SRDY3MlFOTDVfSnExRjZ4T1l3b0hZ", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5QXRHcGg0SHFZUzBpOTUzVWtVaGVMcWhlY0k2R251b2h5QQ==", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5REIzOHJKNHVPNWMteExtTVlKN01aMFk4M1Y4S1kzYVpB", "base64").toString("utf-8"),
-      Buffer.from("QVEuQWI4Uk42SW1aR1lMVW85Ujd0QkNndlNlSVRENEN0TDBNVXBCUS1QMDBvNVA=", "base64").toString("utf-8"),
-      Buffer.from("QVEuQWI4Uk42SnBwbHhQY19aMmt4cllHSHpGNHo3Y1UxcDlsMG9t", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5RDEtdVl5MmZhQWc4Nnd5d0t6a213XzRhNV9tN18xaTRn", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5QTJaUjU0X2ZtY2dfdVZ6UWpTVW1xTTRuRjl3UGg5YnlR", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5Q1A5c0pjaFkyS29fN21PZ2Y5ZnhLVE4tM0VDRjFEMnZR", "base64").toString("utf-8"),
-      Buffer.from("QUl6YVN5QkJwUFNpX05mUXl3R2lscjMxbU96N1BmWk53", "base64").toString("utf-8")
-    ];
+const verifiedKeys = [
+  "AIzaSyBxYI7rpak8iYWkrAh7Py4r49YMLxT1DFA",
+  "AIzaSyDMRfGflkVIVv6WWrMcTTaPWfyP1VJed9c",
+  "AIzaSyCFvac0cjr8mRD672QNL5_Jq1F6xOYwoHY",
+  "AIzaSyAtGph4HqYS0i953UkUheLqhecI6GnuohyA",
+  "AIzaSyDB38rJ4uO5c-tLmMYJ7MZ0Y83V8KY3aZA",
+  "AIzaSyD1-uYy2faAg86wywKzkmw_4a5_m7_1i4g",
+  "AIzaSyA2ZR54_fmcg_uVzQjSUmqM4nF9wPh9byQ",
+  "AIzaSyCP9sJchY2Ko_7mOgf9fxKTN-3ECF1D2vQ",
+  "AIzaSyBBpPSi_NfQywGilr31mOz7PfZNw"
+];
 
-export const DEFAULT_GEMINI_KEYS = rawKeys;
+export const DEFAULT_GEMINI_KEYS = verifiedKeys;
 
 let currentKeyIndex = 0;
 
@@ -32,55 +24,58 @@ export async function analyzeWithGeminiPool(
   const totalKeys = keys.length;
   let lastError: any = null;
 
-  for (let attempt = 0; attempt < totalKeys; attempt++) {
+  // Try models in order: gemini-2.5-flash (fastest/latest), gemini-flash-latest
+  const models = ["gemini-2.5-flash", "gemini-flash-latest"];
+
+  for (let attempt = 0; attempt < Math.min(totalKeys, 5); attempt++) {
     const keyIdx = (currentKeyIndex + attempt) % totalKeys;
     const apiKey = keys[keyIdx];
     const startTime = Date.now();
 
-    try {
-      const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-goog-api-key": apiKey
-        },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { text: prompt },
-              { inline_data: { mime_type: "image/jpeg", data: base64Data } }
-            ]
-          }],
-          generationConfig: {
-            temperature: 0.4,
-            maxOutputTokens: 120,
-          }
-        })
-      });
+    for (const model of models) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const response = await fetch(url, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            contents: [{
+              parts: [
+                { text: prompt },
+                { inline_data: { mime_type: "image/jpeg", data: base64Data } }
+              ]
+            }],
+            generationConfig: {
+              temperature: 0.4,
+              maxOutputTokens: 120,
+            }
+          })
+        });
 
-      if (!response.ok) {
-        const errBody = await response.json().catch(() => ({}));
-        throw new Error("HTTP " + response.status + ": " + JSON.stringify(errBody.error || response.statusText));
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => ({}));
+          throw new Error(`HTTP ${response.status}: ${JSON.stringify(errBody.error || response.statusText)}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error("استجابة فارغة من Gemini");
+
+        const latencyMs = Date.now() - startTime;
+        currentKeyIndex = keyIdx;
+
+        return {
+          text: text.trim(),
+          latencyMs,
+          keyUsed: `Key #${keyIdx + 1} (${apiKey.slice(-4)})`
+        };
+      } catch (err: any) {
+        lastError = err;
       }
-
-      const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (!text) throw new Error("استجابة فارغة من Gemini");
-
-      const latencyMs = Date.now() - startTime;
-      currentKeyIndex = keyIdx;
-
-      return {
-        text: text.trim(),
-        latencyMs,
-        keyUsed: "Key #" + (keyIdx + 1) + " (" + apiKey.slice(-4) + ")"
-      };
-    } catch (err: any) {
-      lastError = err;
-      console.warn("Gemini key #" + (keyIdx + 1) + " failed: " + err.message + ", rotating to next key...");
     }
   }
 
-  throw new Error("جميع مفاتيح Gemini في الحوض فشلت. آخر خطأ: " + lastError?.message);
+  throw new Error("فشلت محاولة الاتصال بنماذج Gemini: " + lastError?.message);
 }
