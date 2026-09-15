@@ -2,19 +2,43 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogIn, ShieldAlert, Sparkles, Volume2 } from "lucide-react";
+import { LogIn, ShieldAlert, Sparkles, Volume2, Mic } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { speak } = useSpeech();
+  const { speak, startListening, isListening, unlockSpeaker } = useSpeech();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [listeningTarget, setListeningTarget] = useState<"user" | "pass" | null>(null);
 
   const handleVoiceHelp = () => {
-    speak("أهلاً بك في تطبيق نور دهب. يرجى كتابة اسم المستخدم وكلمة المرور الخاصة بك للدخول.");
+    unlockSpeaker();
+    speak("أهلاً بك في تطبيق نور دهب. يمكنك نطق اسم المستخدم وكلمة المرور بالصوت عبر الضغط على أيقونة الميكروفون.");
+  };
+
+  const handleVoiceInput = (target: "user" | "pass") => {
+    unlockSpeaker();
+    setListeningTarget(target);
+    const prompt = target === "user" ? "تفضل بنطق اسم المستخدم الآن..." : "تفضل بنطق كلمة المرور الآن...";
+    speak(prompt);
+
+    setTimeout(() => {
+      startListening((text) => {
+        setListeningTarget(null);
+        if (!text) return;
+        const cleaned = text.replace(/\s+/g, "").trim();
+        if (target === "user") {
+          setUsername(cleaned);
+          speak(`تم إدخال اسم المستخدم: ${text}`);
+        } else {
+          setPassword(cleaned);
+          speak("تم إدخال كلمة المرور بنجاح.");
+        }
+      });
+    }, 1800);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -45,7 +69,6 @@ export default function LoginPage() {
 
       speak(`مرحباً بك ${data.user.name}. تم تسجيل الدخول بنجاح.`);
 
-      // If role is admin -> go to /admin, otherwise always go to blind app /
       if (data.user.role === "admin") {
         router.push("/admin");
       } else {
@@ -61,13 +84,13 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-dark-900">
-      <div className="w-full max-w-md bg-dark-800 border-2 border-gold-500/40 rounded-3xl p-8 shadow-2xl space-y-6">
+      <div className="w-full max-w-md bg-dark-800 border-2 border-gold-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
         <div className="text-center space-y-2">
           <div className="inline-flex p-4 bg-gold-500/10 rounded-2xl border border-gold-500/30 text-gold-400 mb-2">
             <Sparkles className="w-10 h-10 animate-pulse" />
           </div>
           <h1 className="text-3xl font-black text-gold-400 tracking-tight">نور دهب</h1>
-          <p className="text-gray-400 text-sm">تسجيل الدخول</p>
+          <p className="text-gray-400 text-sm">تسجيل الدخول الصوتي</p>
         </div>
 
         <button
@@ -89,28 +112,56 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">اسم المستخدم</label>
-            <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="اسم المستخدم"
-              className="w-full px-4 py-3 bg-dark-700 border border-gray-600 rounded-xl text-white text-lg focus:outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/20"
-              autoComplete="username"
-              required
-            />
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="اكتب أو انطق اسمك"
+                className="w-full px-4 py-3 pl-12 bg-dark-700 border border-gray-600 rounded-xl text-white text-base focus:outline-none focus:border-gold-500"
+                autoComplete="username"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => handleVoiceInput("user")}
+                className={`absolute left-2 p-2 rounded-lg transition-all ${
+                  isListening && listeningTarget === "user"
+                    ? "bg-red-500 text-white animate-pulse"
+                    : "bg-gold-500/20 text-gold-400 hover:bg-gold-500/30"
+                }`}
+                title="إملاء بالصوت"
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="block text-sm font-semibold text-gray-300 mb-2">كلمة المرور</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 bg-dark-700 border border-gray-600 rounded-xl text-white text-lg focus:outline-none focus:border-gold-500 focus:ring-2 focus:ring-gold-500/20"
-              autoComplete="current-password"
-              required
-            />
+            <div className="relative flex items-center">
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full px-4 py-3 pl-12 bg-dark-700 border border-gray-600 rounded-xl text-white text-base focus:outline-none focus:border-gold-500"
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => handleVoiceInput("pass")}
+                className={`absolute left-2 p-2 rounded-lg transition-all ${
+                  isListening && listeningTarget === "pass"
+                    ? "bg-red-500 text-white animate-pulse"
+                    : "bg-gold-500/20 text-gold-400 hover:bg-gold-500/30"
+                }`}
+                title="إملاء بالصوت"
+              >
+                <Mic className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           <button

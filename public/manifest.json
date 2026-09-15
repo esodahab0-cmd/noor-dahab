@@ -1,22 +1,45 @@
 {
   "name": "نور دهب - مساعد المكفوفين",
   "short_name": "نور دهب",
-  "description": "مساعد ذكي صوتي فائق السرعة لفاقدي البصر يدمج الكاميرا والصوت ونظام التموضع",
+  "description": "مساعد ذكي صوتي لفاقدي البصر",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "browser"
+  ],
   "orientation": "portrait",
   "background_color": "#0a0a0c",
-  "theme_color": "#0a0a0c",
+  "theme_color": "#d4a017",
+  "prefer_related_applications": false,
+  "categories": [
+    "accessibility",
+    "utilities",
+    "lifestyle"
+  ],
+  "lang": "ar",
+  "dir": "rtl",
   "icons": [
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "وصف فوري",
+      "url": "/",
+      "description": "افتح الكاميرا وصف ما أمامك"
     }
   ]
 }

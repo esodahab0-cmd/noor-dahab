@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Volume2, VolumeX, Mic, Navigation, RefreshCw, LogOut,
   Eye, FileText, Banknote, Pill, Users, AlertTriangle, Crosshair,
-  Camera, MapPin, ShieldCheck, UserPlus, UserCheck, Save, Zap, Radio
+  Camera, MapPin, ShieldCheck, UserPlus, UserCheck, Save, Zap
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
@@ -40,7 +40,7 @@ export default function BlindHomePage() {
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [currentResult, setCurrentResult] = useState("المس الشاشة لوصف فوري لما أمامك.");
+  const [currentResult, setCurrentResult] = useState("المس الشاشة لوصف ما أمامك، أو قل أمر صوتي.");
   const [activeTier, setActiveTier] = useState("");
   const [locationName, setLocationName] = useState("");
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -72,69 +72,108 @@ export default function BlindHomePage() {
     }, 150);
   };
 
-  // ── Start Camera ──────────────────────────────────────────────
+  // ── Robust Camera Initialization (3-Tier Fallback) ─────────────
   const startCamera = useCallback(async () => {
     setCameraError("");
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: { ideal: "environment" },
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
-      }
-      setCameraReady(true);
-      return true;
-    } catch (err: any) {
-      const msg = err.name === "NotAllowedError"
-        ? "تم رفض إذن الكاميرا. يرجى السماح بالوصول من إعدادات المتصفح."
-        : "لم يتم العثور على كاميرا أو حدث خطأ: " + err.message;
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
+      const msg = "المتصفح لا يدعم الوصول للكاميرا. يرجى استخدام متصفح جوجل كروم.";
       setCameraError(msg);
       speak(msg);
       return false;
     }
+
+    // Stop existing stream if any
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+    }
+
+    const constraintsList = [
+      // 1. Ideal back camera for mobile
+      { video: { facingMode: { ideal: "environment" } }, audio: false },
+      // 2. Strict back camera
+      { video: { facingMode: "environment" }, audio: false },
+      // 3. Any available camera (laptop / generic)
+      { video: true, audio: false }
+    ];
+
+    let stream: MediaStream | null = null;
+    let lastErr: any = null;
+
+    for (const constraints of constraintsList) {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        if (stream) break;
+      } catch (e: any) {
+        lastErr = e;
+      }
+    }
+
+    if (!stream) {
+      const isDenied = lastErr?.name === "NotAllowedError" || lastErr?.name === "PermissionDeniedError";
+      const msg = isDenied
+        ? "تم رفض إذن الكاميرا. يرجى الضغط على القفل بجانب الرابط والسماح للكاميرا ثم تحديث الصفحة."
+        : "تعذر فتح الكاميرا: " + (lastErr?.message || "يرجى التأكد من عدم استخدامها في تطبيق آخر");
+      setCameraError(msg);
+      speak(msg);
+      return false;
+    }
+
+    streamRef.current = stream;
+
+    if (videoRef.current) {
+      const vid = videoRef.current;
+      vid.setAttribute("playsinline", "true");
+      vid.setAttribute("webkit-playsinline", "true");
+      vid.muted = true;
+      vid.srcObject = stream;
+
+      try {
+        await vid.play();
+      } catch (playErr) {
+        vid.onloadedmetadata = () => {
+          vid.play().catch(() => {});
+        };
+      }
+    }
+
+    setCameraReady(true);
+    return true;
   }, [speak]);
 
-  // ── Request all permissions at startup ──────────────────────
+  // ── Request All Permissions with Instant Audio Feedback ──────
   const requestPermissions = useCallback(async () => {
     setPermState("requesting");
-    unlockSpeaker(); // unlock audio on first user touch!
-    speak("جارٍ تشغيل الكاميرا والموقع ومكبر الصوت...");
+    unlockSpeaker();
+    speak("جارٍ فتح الكاميرا والاسبيكر الآن...");
 
     const camOk = await startCamera();
 
-    navigator.geolocation?.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lon } = pos.coords;
-        setLocationCoords({ lat, lon });
-        try {
-          const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
-          const data = await res.json();
-          if (data.success) {
-            setLocationName(data.address);
-          }
-        } catch {}
-      },
-      (err) => {
-        console.warn("Geolocation denied:", err.message);
-      },
-      { enableHighAccuracy: true, timeout: 8000 }
-    );
-
-    setPermState(camOk ? "granted" : "denied");
     if (camOk) {
+      setPermState("granted");
       setTimeout(() => {
-        speak("الكاميرا ومكبر الصوت جاهزان. نور دهب في خدمتك. المس الشاشة في أي مكان أو تحدث للوصف الفوري.");
-      }, 500);
+        speak("الكاميرا والاسبيكر جاهزان تماماً. نور دهب يرى ما أمامك الآن. المس الشاشة في أي مكان أو قل أمر صوتي.");
+      }, 300);
+
+      // Request geolocation quietly in background without blocking camera
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          async (pos) => {
+            const { latitude: lat, longitude: lon } = pos.coords;
+            setLocationCoords({ lat, lon });
+            try {
+              const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
+              const data = await res.json();
+              if (data.success) {
+                setLocationName(data.address);
+              }
+            } catch {}
+          },
+          () => {},
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }
+    } else {
+      setPermState("denied");
     }
   }, [startCamera, speak, unlockSpeaker]);
 
@@ -154,7 +193,7 @@ export default function BlindHomePage() {
   // ── Save Face Trigger ────────────────────────────────────────
   const triggerSaveFace = async () => {
     if (!videoRef.current || !cameraReady) {
-      speak("يرجى فتح الكاميرا أولاً.");
+      speak("يرجى تفعيل الكاميرا أولاً.");
       return;
     }
     triggerHaptic("medium");
@@ -162,7 +201,7 @@ export default function BlindHomePage() {
       const base64 = await compressImage(videoRef.current, 512, 0.7);
       setCapturedFaceBase64(base64);
       setIsSaveModalOpen(true);
-      speak("تم التقاط الصورة. تفضل بإملاء اسم الشخص بصوتك الآن.");
+      speak("تم التقاط الصورة. تفضل بنطق اسم هذا الشخص بصوتك الآن.");
 
       setTimeout(() => {
         startListening((dictatedName) => {
@@ -182,7 +221,7 @@ export default function BlindHomePage() {
     try {
       await saveFaceLocally({ name, imageBase64: base64, relation: "شخص مقرب" });
       triggerHaptic("success");
-      speak(`تم حفظ صورة ${name} على هاتفك بنجاح. سأتعرف عليه فوراً عند رؤيته.`);
+      speak(`تم حفظ صورة ${name} بنجاح. سأتعرف عليه فوراً عند رؤيته أمامك.`);
       setIsSaveModalOpen(false);
       setPersonNameInput("");
       setCapturedFaceBase64("");
@@ -199,7 +238,7 @@ export default function BlindHomePage() {
   ) => {
     if (analyzing) return;
     if (!cameraReady) {
-      speak("يرجى تفعيل الكاميرا أولاً.");
+      speak("يرجى تشغيل الكاميرا أولاً.");
       return;
     }
 
@@ -211,11 +250,11 @@ export default function BlindHomePage() {
     if (!silentPrompt) {
       const labels: Record<string, string> = {
         general: "أرى الآن...",
-        read_text: "أقرأ النص...",
+        read_text: "أقرأ النصوص...",
         currency: "أفحص العملة...",
         medication: "أفحص الدواء...",
         faces: "أتعرف على الشخص...",
-        obstacle: "أرصد الطريق والعوائق...",
+        obstacle: "أرصد الطريق...",
         location: "أحدد المكان...",
       };
       speak(labels[mode]);
@@ -223,7 +262,6 @@ export default function BlindHomePage() {
 
     try {
       if (!videoRef.current) throw new Error("الكاميرا غير جاهزة");
-      // Fast lightweight image compression (< 40KB) for instantaneous response
       const base64 = await compressImage(videoRef.current, 512, 0.65);
       const user = JSON.parse(localStorage.getItem("noor_user") || "{}");
       const token = localStorage.getItem("noor_session_token") || "";
@@ -264,10 +302,10 @@ export default function BlindHomePage() {
   // ── Auto Scan Mode ("اول ما يري شئ يوصفه") ───────────────────
   useEffect(() => {
     if (autoScanEnabled && cameraReady) {
-      speak("تم تفعيل وضع الوصف التلقائي المستمر. سأصف ما أمامك أولاً بأول.");
+      speak("تم تفعيل الوصف التلقائي المستمر. سأصف ما أمامك كل بضع ثوانٍ.");
       autoScanTimerRef.current = setInterval(() => {
         handleAnalyze("general", true);
-      }, 7000);
+      }, 6500);
     } else {
       clearInterval(autoScanTimerRef.current);
     }
@@ -296,12 +334,15 @@ export default function BlindHomePage() {
     }, 300);
   };
 
-  // ── Voice Command ("اوصف", "شايف إيه", "مين قدامي") ──────────
+  // ── Full Voice Input Assistant ("كل شيء بصوت المستخدم") ─────
   const handleVoiceCommand = () => {
     unlockSpeaker();
-    if (permState !== "granted") { speak("يرجى السماح بالكاميرا أولاً."); return; }
+    if (permState !== "granted") {
+      speak("يرجى تشغيل الكاميرا أولاً بالضغط على زر البدء.");
+      return;
+    }
     triggerHaptic("light");
-    speak("أسمعك الآن، تفضل...");
+    speak("أسمعك الآن، تفضل بالتحدث...");
     startListening((transcript) => {
       triggerHaptic("medium");
       const lower = transcript.toLowerCase();
@@ -334,7 +375,7 @@ export default function BlindHomePage() {
         stopSpeaking();
       }
       else {
-        // Any request like "اوصف اللي قدامي" / "شايف ايه" / "اوصفلي"
+        // "اوصف"، "شايف ايه"، "قدامي ايه"، "اوصفلي"
         handleAnalyze("general");
       }
     });
@@ -346,7 +387,9 @@ export default function BlindHomePage() {
       {/* Live Camera Feed */}
       <video
         ref={videoRef}
-        playsInline muted autoPlay
+        playsInline
+        muted
+        autoPlay
         className="absolute inset-0 w-full h-full object-cover opacity-35 filter brightness-90 contrast-120 pointer-events-none"
       />
 
@@ -420,7 +463,7 @@ export default function BlindHomePage() {
             </div>
             <div className="text-center">
               <h2 className="text-xl font-black text-white mb-1">اضغط لبدء نور دهب</h2>
-              <p className="text-xs text-gray-300">لتفعيل الكاميرا ومكبر الصوت والتحدث معك فوراً.</p>
+              <p className="text-xs text-gray-300">لتشغيل الكاميرا ومكبر الصوت فوراً.</p>
             </div>
             <button onClick={requestPermissions}
               className="w-full py-4 bg-gold-500 hover:bg-gold-400 text-dark-900 font-black text-lg rounded-2xl shadow-xl flex items-center justify-center gap-2 animate-pulse">
@@ -434,18 +477,18 @@ export default function BlindHomePage() {
           <div className="flex flex-col items-center gap-4">
             <RefreshCw className="w-16 h-16 text-gold-400 animate-spin" />
             <p className="text-white font-bold text-lg">جارٍ تشغيل الكاميرا والاسبيكر...</p>
-            <p className="text-gray-400 text-sm">اضغط "سماح" في نافذة المتصفح</p>
+            <p className="text-gray-400 text-sm">اضغط "سماح" في نافذة المتصفح إذا ظهرت</p>
           </div>
         )}
 
         {permState === "denied" && (
           <div className="flex flex-col items-center gap-4 p-6 bg-red-950/90 rounded-3xl border-2 border-red-500/50 max-w-xs w-full">
             <Camera className="w-12 h-12 text-red-400" />
-            <p className="text-white font-bold text-center text-sm">{cameraError || "يرجى منح إذن الكاميرا من المتصفح"}</p>
+            <p className="text-white font-bold text-center text-sm">{cameraError || "يرجى منح إذن الكاميرا من إعدادات المتصفح"}</p>
             <button onClick={requestPermissions}
               className="w-full py-3 bg-red-600 text-white font-bold rounded-xl flex items-center justify-center gap-2">
               <RefreshCw className="w-5 h-5" />
-              حاول مجدداً
+              حاول تشغيل الكاميرا مجدداً
             </button>
           </div>
         )}

@@ -1,7 +1,51 @@
-const CACHE_NAME = "noor-dahab-v2";
-self.addEventListener("install", (e) => {
+const CACHE_NAME = "noor-dahab-pwa-v3";
+const ASSETS_TO_CACHE = [
+  "/",
+  "/login",
+  "/manifest.json",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png"
+];
+
+self.addEventListener("install", (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(ASSETS_TO_CACHE).catch(() => {});
+    })
+  );
   self.skipWaiting();
 });
-self.addEventListener("activate", (e) => {
-  e.waitUntil(clients.claim());
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
+    caches.keys().then((keys) => {
+      return Promise.all(
+        keys.map((key) => {
+          if (key !== CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
+
+// Fetch event listener required by Chrome for PWA installability
+self.addEventListener("fetch", (event) => {
+  // Only handle GET requests
+  if (event.request.method !== "GET") return;
+
+  // Let API requests pass straight through to network
+  if (event.request.url.includes("/api/")) {
+    return;
+  }
+
+  event.respondWith(
+    fetch(event.request).catch(() => {
+      return caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) return cachedResponse;
+        return caches.match("/");
+      });
+    })
+  );
 });
