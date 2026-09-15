@@ -1,0 +1,30 @@
+export type AIProvider = "groq" | "gemini" | "cloudflare" | "huggingface";
+
+export interface AIAnalysisRequest {
+  imageBase64: string;
+  mode?: "general" | "read_text" | "currency" | "location" | "medication" | "faces" | "obstacle";
+  locationInfo?: {
+    latitude?: number;
+    longitude?: number;
+    addressText?: string;
+  };
+  customPrompt?: string;
+}
+
+export interface AIAnalysisResponse {
+  success: boolean;
+  text: string;
+  provider: AIProvider;
+  latencyMs: number;
+  error?: string;
+  isFallback?: boolean;
+  tierAttempted?: string[];
+}
+
+export interface AIKeysConfig {
+  geminiKey?: string;
+  groqKey?: string;
+  cloudflareAccountId?: string;
+  cloudflareApiToken?: string;
+  huggingfaceKey?: string;
+}

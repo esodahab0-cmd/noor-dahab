@@ -1,0 +1,37 @@
+import Groq from "groq-sdk";
+
+export async function analyzeWithGroq(
+  imageBase64: string,
+  prompt: string,
+  apiKey: string
+): Promise<{ text: string; latencyMs: number }> {
+  const startTime = Date.now();
+  const groq = new Groq({ apiKey });
+
+  const imageUrl = imageBase64.startsWith("data:") 
+    ? imageBase64 
+    : `data:image/jpeg;base64,${imageBase64}`;
+
+  const completion = await groq.chat.completions.create({
+    model: "llama-3.2-11b-vision-preview",
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: prompt },
+          {
+            type: "image_url",
+            image_url: { url: imageUrl }
+          }
+        ]
+      }
+    ],
+    temperature: 0.3,
+    max_tokens: 300,
+  });
+
+  const text = completion.choices[0]?.message?.content || "لم يتم استخراج وصف.";
+  const latencyMs = Date.now() - startTime;
+
+  return { text, latencyMs };
+}
