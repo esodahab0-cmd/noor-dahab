@@ -72,59 +72,63 @@ export default function BlindHomePage() {
     }, 150);
   };
 
-  // ── Robust Camera Initialization (3-Tier Fallback) ─────────────
-  const startCamera = useCallback(async () => {
+  // ── Robust Camera Initialization (Direct User Gesture) ────────
+  const requestPermissions = async () => {
+    setPermState("requesting");
     setCameraError("");
+    unlockSpeaker();
+
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
-      const msg = "المتصفح لا يدعم الوصول للكاميرا. يرجى استخدام متصفح جوجل كروم.";
+      const msg = "المتصفح لا يدعم الكاميرا أو الصفحة مفتوحة برابط غير آمن.";
       setCameraError(msg);
+      setPermState("denied");
       speak(msg);
-      return false;
+      return;
     }
 
     // Stop existing stream if any
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
     }
-
-    const constraintsList = [
-      // 1. Ideal back camera for mobile
-      { video: { facingMode: { ideal: "environment" } }, audio: false },
-      // 2. Strict back camera
-      { video: { facingMode: "environment" }, audio: false },
-      // 3. Any available camera (laptop / generic)
-      { video: true, audio: false }
-    ];
 
     let stream: MediaStream | null = null;
     let lastErr: any = null;
 
-    for (const constraints of constraintsList) {
+    // Try back camera first, then any camera
+    const attempts = [
+      { video: { facingMode: { ideal: "environment" } }, audio: false },
+      { video: { facingMode: "environment" }, audio: false },
+      { video: true, audio: false }
+    ];
+
+    for (const constraint of attempts) {
       try {
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
+        stream = await navigator.mediaDevices.getUserMedia(constraint);
         if (stream) break;
-      } catch (e: any) {
-        lastErr = e;
+      } catch (err: any) {
+        lastErr = err;
       }
     }
 
     if (!stream) {
       const isDenied = lastErr?.name === "NotAllowedError" || lastErr?.name === "PermissionDeniedError";
       const msg = isDenied
-        ? "تم رفض إذن الكاميرا. يرجى الضغط على القفل بجانب الرابط والسماح للكاميرا ثم تحديث الصفحة."
-        : "تعذر فتح الكاميرا: " + (lastErr?.message || "يرجى التأكد من عدم استخدامها في تطبيق آخر");
+        ? "تم رفض إذن الكاميرا. يرجى الضغط على القفل بجانب الرابط أعلى المتصفح واختيار السماح للكاميرا ثم تحديث الصفحة."
+        : "تعذر تشغيل الكاميرا: " + (lastErr?.message || "يرجى التحقق من إعدادات الهاتف");
       setCameraError(msg);
+      setPermState("denied");
       speak(msg);
-      return false;
+      return;
     }
 
     streamRef.current = stream;
 
     if (videoRef.current) {
       const vid = videoRef.current;
+      vid.muted = true;
       vid.setAttribute("playsinline", "true");
       vid.setAttribute("webkit-playsinline", "true");
-      vid.muted = true;
       vid.srcObject = stream;
 
       try {
@@ -137,45 +141,31 @@ export default function BlindHomePage() {
     }
 
     setCameraReady(true);
-    return true;
-  }, [speak]);
+    setPermState("granted");
 
-  // ── Request All Permissions with Instant Audio Feedback ──────
-  const requestPermissions = useCallback(async () => {
-    setPermState("requesting");
-    unlockSpeaker();
-    speak("جارٍ فتح الكاميرا والاسبيكر الآن...");
+    setTimeout(() => {
+      speak("تم تشغيل الكاميرا بنجاح. نور دهب في خدمتك الآن. المس الشاشة في أي مكان أو قل أمر صوتي.");
+    }, 200);
 
-    const camOk = await startCamera();
-
-    if (camOk) {
-      setPermState("granted");
-      setTimeout(() => {
-        speak("الكاميرا والاسبيكر جاهزان تماماً. نور دهب يرى ما أمامك الآن. المس الشاشة في أي مكان أو قل أمر صوتي.");
-      }, 300);
-
-      // Request geolocation quietly in background without blocking camera
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          async (pos) => {
-            const { latitude: lat, longitude: lon } = pos.coords;
-            setLocationCoords({ lat, lon });
-            try {
-              const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
-              const data = await res.json();
-              if (data.success) {
-                setLocationName(data.address);
-              }
-            } catch {}
-          },
-          () => {},
-          { enableHighAccuracy: true, timeout: 10000 }
-        );
-      }
-    } else {
-      setPermState("denied");
+    // Geolocation in background
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const { latitude: lat, longitude: lon } = pos.coords;
+          setLocationCoords({ lat, lon });
+          try {
+            const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
+            const data = await res.json();
+            if (data.success) {
+              setLocationName(data.address);
+            }
+          } catch {}
+        },
+        () => {},
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
     }
-  }, [startCamera, speak, unlockSpeaker]);
+  };
 
   // ── Init ────────────────────────────────────────────────────
   useEffect(() => {
@@ -193,7 +183,7 @@ export default function BlindHomePage() {
   // ── Save Face Trigger ────────────────────────────────────────
   const triggerSaveFace = async () => {
     if (!videoRef.current || !cameraReady) {
-      speak("يرجى تفعيل الكاميرا أولاً.");
+      speak("يرجى تشغيل الكاميرا أولاً.");
       return;
     }
     triggerHaptic("medium");
@@ -315,7 +305,7 @@ export default function BlindHomePage() {
   // ── Center Tap with SOS (4 taps) ────────────────────────────
   const handleCenterTap = () => {
     if (!isAudioUnlocked) unlockSpeaker();
-    if (permState === "idle" || permState === "denied") {
+    if (permState !== "granted") {
       requestPermissions();
       return;
     }
@@ -334,7 +324,7 @@ export default function BlindHomePage() {
     }, 300);
   };
 
-  // ── Full Voice Input Assistant ("كل شيء بصوت المستخدم") ─────
+  // ── Voice Command Handler ───────────────────────────────────
   const handleVoiceCommand = () => {
     unlockSpeaker();
     if (permState !== "granted") {
@@ -375,7 +365,6 @@ export default function BlindHomePage() {
         stopSpeaking();
       }
       else {
-        // "اوصف"، "شايف ايه"، "قدامي ايه"، "اوصفلي"
         handleAnalyze("general");
       }
     });
@@ -384,13 +373,13 @@ export default function BlindHomePage() {
   // ─────────────────────────────────────────────────────────────
   return (
     <main className="fixed inset-0 bg-black flex flex-col justify-between overflow-hidden select-none touch-none">
-      {/* Live Camera Feed */}
+      {/* Live Camera Feed (High Visibility) */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        className="absolute inset-0 w-full h-full object-cover opacity-35 filter brightness-90 contrast-120 pointer-events-none"
+        className="absolute inset-0 w-full h-full object-cover opacity-90 filter brightness-105 contrast-110 pointer-events-none"
       />
 
       {/* Top Bar */}
@@ -445,75 +434,83 @@ export default function BlindHomePage() {
       {/* PWA Install Banner */}
       <PWAInstallPrompt />
 
-      {/* CENTER: Permissions / Scan Area */}
-      <button type="button" onClick={handleCenterTap} disabled={analyzing}
-        aria-label="اضغط لتصوير وشرح المشهد أو 4 مرات للطوارئ"
-        className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform">
-
-        {/* Permission Request State */}
-        {permState === "idle" && (
-          <div className="flex flex-col items-center gap-4 p-6 bg-dark-800/95 rounded-3xl border-2 border-gold-500 shadow-2xl max-w-xs w-full">
-            <div className="flex gap-3">
-              <div className="p-3 bg-gold-500/20 text-gold-400 rounded-2xl border border-gold-500/30">
-                <Camera className="w-8 h-8" />
+      {/* CENTER: Permissions / Scan Area (Non-nested valid HTML) */}
+      {permState !== "granted" ? (
+        <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center">
+          {permState === "idle" && (
+            <div className="flex flex-col items-center gap-4 p-6 bg-dark-800/95 rounded-3xl border-2 border-gold-500 shadow-2xl max-w-xs w-full">
+              <div className="flex gap-3">
+                <div className="p-3 bg-gold-500/20 text-gold-400 rounded-2xl border border-gold-500/30">
+                  <Camera className="w-8 h-8" />
+                </div>
+                <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
+                  <Volume2 className="w-8 h-8 animate-pulse" />
+                </div>
               </div>
-              <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-2xl border border-emerald-500/30">
-                <Volume2 className="w-8 h-8 animate-pulse" />
+              <div className="text-center">
+                <h2 className="text-xl font-black text-white mb-1">اضغط لبدء نور دهب</h2>
+                <p className="text-xs text-gray-300">لتشغيل الكاميرا ومكبر الصوت والتحدث فوراً.</p>
               </div>
+              <button
+                type="button"
+                onClick={requestPermissions}
+                className="w-full py-4 bg-gold-500 hover:bg-gold-400 text-dark-900 font-black text-lg rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-transform animate-pulse cursor-pointer"
+              >
+                <ShieldCheck className="w-6 h-6" />
+                تشغيل الكاميرا والاسبيكر
+              </button>
             </div>
-            <div className="text-center">
-              <h2 className="text-xl font-black text-white mb-1">اضغط لبدء نور دهب</h2>
-              <p className="text-xs text-gray-300">لتشغيل الكاميرا ومكبر الصوت فوراً.</p>
+          )}
+
+          {permState === "requesting" && (
+            <div className="flex flex-col items-center gap-4 p-6 bg-dark-800/90 rounded-3xl border border-gray-700">
+              <RefreshCw className="w-16 h-16 text-gold-400 animate-spin" />
+              <p className="text-white font-bold text-lg">جارٍ فتح الكاميرا...</p>
+              <p className="text-gray-400 text-sm">اضغط "سماح" (Allow) في متصفحك إذا ظهرت</p>
             </div>
-            <button onClick={requestPermissions}
-              className="w-full py-4 bg-gold-500 hover:bg-gold-400 text-dark-900 font-black text-lg rounded-2xl shadow-xl flex items-center justify-center gap-2 animate-pulse">
-              <ShieldCheck className="w-6 h-6" />
-              تشغيل الكاميرا والاسبيكر
-            </button>
-          </div>
-        )}
+          )}
 
-        {permState === "requesting" && (
-          <div className="flex flex-col items-center gap-4">
-            <RefreshCw className="w-16 h-16 text-gold-400 animate-spin" />
-            <p className="text-white font-bold text-lg">جارٍ تشغيل الكاميرا والاسبيكر...</p>
-            <p className="text-gray-400 text-sm">اضغط "سماح" في نافذة المتصفح إذا ظهرت</p>
-          </div>
-        )}
-
-        {permState === "denied" && (
-          <div className="flex flex-col items-center gap-4 p-6 bg-red-950/90 rounded-3xl border-2 border-red-500/50 max-w-xs w-full">
-            <Camera className="w-12 h-12 text-red-400" />
-            <p className="text-white font-bold text-center text-sm">{cameraError || "يرجى منح إذن الكاميرا من إعدادات المتصفح"}</p>
-            <button onClick={requestPermissions}
-              className="w-full py-3 bg-red-600 text-white font-bold rounded-xl flex items-center justify-center gap-2">
-              <RefreshCw className="w-5 h-5" />
-              حاول تشغيل الكاميرا مجدداً
-            </button>
-          </div>
-        )}
-
-        {permState === "granted" && (
-          <>
-            <div className={`w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-3 ${
-              analyzing ? "border-blue-400 bg-blue-500/20" : "border-gold-400 bg-gold-500/20 gold-glow"
-            }`}>
-              {analyzing
-                ? <RefreshCw className="w-12 h-12 text-blue-300 animate-spin" />
-                : <Eye className="w-12 h-12 text-gold-400 animate-pulse" />
-              }
+          {permState === "denied" && (
+            <div className="flex flex-col items-center gap-4 p-6 bg-red-950/90 rounded-3xl border-2 border-red-500/50 max-w-xs w-full">
+              <Camera className="w-12 h-12 text-red-400" />
+              <p className="text-white font-bold text-center text-sm">{cameraError || "يرجى منح إذن الكاميرا من إعدادات المتصفح"}</p>
+              <button
+                type="button"
+                onClick={requestPermissions}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl flex items-center justify-center gap-2 active:scale-95"
+              >
+                <RefreshCw className="w-5 h-5" />
+                حاول تشغيل الكاميرا مجدداً
+              </button>
             </div>
+          )}
+        </div>
+      ) : (
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={handleCenterTap}
+          aria-label="المس الشاشة لوصف فوري أو 4 نقرات للطوارئ"
+          className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform"
+        >
+          <div className={`w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-3 ${
+            analyzing ? "border-blue-400 bg-blue-500/30" : "border-gold-400 bg-gold-500/30 gold-glow"
+          }`}>
+            {analyzing
+              ? <RefreshCw className="w-12 h-12 text-blue-300 animate-spin" />
+              : <Eye className="w-12 h-12 text-gold-400 animate-pulse" />
+            }
+          </div>
 
-            <p className="text-lg font-black text-white max-w-sm leading-relaxed px-4 py-2 bg-black/85 rounded-2xl border border-gold-500/30 text-center shadow-lg">
-              {analyzing ? "جارٍ التحليل السريع..." : currentResult}
-            </p>
+          <p className="text-lg font-black text-white max-w-sm leading-relaxed px-4 py-2 bg-black/85 rounded-2xl border border-gold-500/30 text-center shadow-lg">
+            {analyzing ? "جارٍ التحليل السريع..." : currentResult}
+          </p>
 
-            <span className="mt-2 text-[11px] font-bold text-gold-300/90 bg-black/70 px-3 py-1 rounded-full border border-white/10">
-              المس الشاشة لوصف فوري • أو اضغط "أمر صوتي"
-            </span>
-          </>
-        )}
-      </button>
+          <span className="mt-2 text-[11px] font-bold text-gold-300/90 bg-black/70 px-3 py-1 rounded-full border border-white/10">
+            المس الشاشة لوصف فوري • أو اضغط "أمر صوتي"
+          </span>
+        </div>
+      )}
 
       {/* Bottom Action Buttons */}
       {permState === "granted" && (

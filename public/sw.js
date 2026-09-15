@@ -1,18 +1,6 @@
-const CACHE_NAME = "noor-dahab-pwa-v3";
-const ASSETS_TO_CACHE = [
-  "/",
-  "/login",
-  "/manifest.json",
-  "/icons/icon-192.png",
-  "/icons/icon-512.png"
-];
+const CACHE_NAME = "noor-dahab-pwa-v4";
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS_TO_CACHE).catch(() => {});
-    })
-  );
   self.skipWaiting();
 });
 
@@ -30,20 +18,34 @@ self.addEventListener("activate", (event) => {
   );
 });
 
-// Fetch event listener required by Chrome for PWA installability
+// IMPORTANT: NEVER intercept cross-origin requests (especially Firebase / Firestore / Google APIs)
 self.addEventListener("fetch", (event) => {
-  // Only handle GET requests
-  if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
 
-  // Let API requests pass straight through to network
-  if (event.request.url.includes("/api/")) {
+  // 1. Completely ignore any request that is NOT from our own domain
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
+  // 2. Completely ignore API routes, Firebase, Firestore, WebSockets
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.hostname.includes("firestore") ||
+    url.hostname.includes("googleapis") ||
+    url.hostname.includes("firebase")
+  ) {
+    return;
+  }
+
+  // 3. Only handle GET requests for our static assets
+  if (event.request.method !== "GET") {
     return;
   }
 
   event.respondWith(
     fetch(event.request).catch(() => {
-      return caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) return cachedResponse;
+      return caches.match(event.request).then((res) => {
+        if (res) return res;
         return caches.match("/");
       });
     })
