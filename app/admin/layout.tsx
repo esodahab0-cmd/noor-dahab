@@ -71,6 +71,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span>نظام الجلسة الواحدة نشط</span>
           </div>
 
+          <div className="text-center p-2 bg-dark-700/50 rounded-xl border border-gray-700">
+            <p className="text-[11px] text-gray-300 font-bold">م/ إسلام أبو دهب</p>
+            <a
+              href="https://dahabsoftware.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-gold-400 hover:underline font-bold"
+            >
+              Dahab Software 🌐
+            </a>
+          </div>
+
           <button
             onClick={() => {
               localStorage.clear();

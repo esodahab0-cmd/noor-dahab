@@ -173,6 +173,21 @@ export default function LoginPage() {
             {loading ? "جارٍ التحقق والدخول..." : "تسجيل الدخول"}
           </button>
         </form>
+
+        {/* Creator & Company Credits */}
+        <div className="pt-4 border-t border-gray-800 text-center space-y-1">
+          <p className="text-xs text-gray-300 font-bold">
+            فكرة وتطوير: <span className="text-gold-400">المهندس إسلام أبو دهب</span>
+          </p>
+          <a
+            href="https://dahabsoftware.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block text-[11px] text-amber-300/80 hover:text-gold-300 font-medium underline underline-offset-4 transition-colors"
+          >
+            شركة دهب سوفتوير (Dahab Software) 🌐
+          </a>
+        </div>
       </div>
     </div>
   );

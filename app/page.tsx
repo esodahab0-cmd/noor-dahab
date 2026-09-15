@@ -337,7 +337,12 @@ export default function BlindHomePage() {
       triggerHaptic("medium");
       const lower = transcript.toLowerCase();
 
-      if (/احفظ|سجل|تذكر|صورة شخص/.test(lower)) {
+      if (/مين صاحب|صاحب الموقع|صاحب الفكرة|مين صنعك|مين طورك|مين برمجك|مين عملك|إسلام|اسلام|دهب سوفتوير|المطور/.test(lower)) {
+        const creatorMsg = "مبتكر ومطور تطبيق نور دهب وصاحب الفكرة هو المهندس إسلام أبو دهب، والتطبيق تابع لشركة دهب سوفتوير. يمكنك زيارة موقع الشركة عبر الرابط أسفل الشاشة.";
+        setCurrentResult("المطور: المهندس إسلام أبو دهب • Dahab Software");
+        speak(creatorMsg);
+      }
+      else if (/احفظ|سجل|تذكر|صورة شخص/.test(lower)) {
         triggerSaveFace();
       }
       else if (/نص|اقرأ|كلمة|ورقة|كتابة|لافتة/.test(lower)) {
@@ -560,6 +565,19 @@ export default function BlindHomePage() {
               {isSpeaking ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-gray-400" />}
               إسكات
             </button>
+          </div>
+
+          {/* Eng. Eslam Abu Dahab & Company link */}
+          <div className="text-center pt-0.5">
+            <a
+              href="https://dahabsoftware.com/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10px] text-gray-400 hover:text-gold-300 font-bold transition-colors inline-flex items-center gap-1"
+            >
+              <span>فكرة وتطوير: المهندس إسلام أبو دهب</span>
+              <span className="text-gold-400">• شركة دهب سوفتوير 🌐</span>
+            </a>
           </div>
         </footer>
       )}
