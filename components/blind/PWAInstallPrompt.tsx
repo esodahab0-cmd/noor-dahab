@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Download, Smartphone, X, HelpCircle, Check } from "lucide-react";
+import { Download, Smartphone, X } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 
 export function PWAInstallPrompt() {
@@ -9,12 +9,14 @@ export function PWAInstallPrompt() {
   const [isStandalone, setIsStandalone] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const { speak } = useSpeech();
 
   useEffect(() => {
+    setMounted(true);
     if (typeof window === "undefined") return;
 
-    // Check if app is already installed / standalone
+    // Check if app is already running as installed standalone
     const standalone = window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as any).standalone === true;
     setIsStandalone(standalone);
@@ -53,8 +55,8 @@ export function PWAInstallPrompt() {
     }
   };
 
-  // If already running as an installed standalone PWA app, hide install banner
-  if (isStandalone) return null;
+  // Prevent any hydration mismatch
+  if (!mounted || isStandalone) return null;
 
   return (
     <>
