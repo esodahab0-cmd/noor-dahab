@@ -8,8 +8,9 @@ export function useSpeech() {
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const recRef = useRef<any>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Play audio chime using Web Audio API (works on all mobile devices after 1 touch)
+  // Play audio chime using Web Audio API
   const playChime = useCallback((freq = 587.33, duration = 0.15) => {
     try {
       if (!audioCtxRef.current) {
@@ -34,86 +35,99 @@ export function useSpeech() {
     } catch (e) {}
   }, []);
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      synthRef.current = window.speechSynthesis;
-      // Force load voices
-      window.speechSynthesis.getVoices();
-      if (window.speechSynthesis.onvoiceschanged !== undefined) {
-        window.speechSynthesis.onvoiceschanged = () => {
-          window.speechSynthesis.getVoices();
-        };
-      }
-    }
-  }, []);
-
   // Unlock audio engine for mobile browsers
   const unlockSpeaker = useCallback(() => {
     try {
       playChime(587.33, 0.2);
-      if (synthRef.current) {
-        // Small silent utterance to warm up mobile speech engine
-        const warmUp = new SpeechSynthesisUtterance("نور دهب");
-        warmUp.lang = "ar-SA";
-        warmUp.volume = 1.0;
-        warmUp.rate = 1.0;
-        synthRef.current.speak(warmUp);
+      if (typeof window !== "undefined") {
+        const silentAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA");
+        silentAudio.play().catch(() => {});
       }
       setIsAudioUnlocked(true);
     } catch (e) {}
   }, [playChime]);
 
-  const speak = useCallback((text: string, onEnd?: () => void) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-    const synth = window.speechSynthesis;
-
+  // Stop any active speech (audio or synth)
+  const stopSpeaking = useCallback(() => {
     try {
-      // Resume if paused (Chrome mobile quirk)
+      if (activeAudioRef.current) {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.currentTime = 0;
+        activeAudioRef.current = null;
+      }
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch (e) {}
+    setIsSpeaking(false);
+  }, []);
+
+  // High-Quality Arabic Voice via Audio Stream with WebSpeech Fallback
+  const speak = useCallback((text: string, onEnd?: () => void) => {
+    if (!text || !text.trim()) return;
+    stopSpeaking();
+
+    // 1. Try High-Quality Realistic Arabic Audio Stream via /api/ai/tts
+    try {
+      const cleanText = text.trim();
+      const audioUrl = `/api/ai/tts?text=${encodeURIComponent(cleanText)}`;
+      const audio = new Audio(audioUrl);
+      activeAudioRef.current = audio;
+
+      audio.onplay = () => setIsSpeaking(true);
+      audio.onended = () => {
+        setIsSpeaking(false);
+        activeAudioRef.current = null;
+        onEnd?.();
+      };
+      audio.onerror = () => {
+        // Fallback to Web Speech Synthesis if audio stream fails
+        fallbackToSynth(cleanText, onEnd);
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          fallbackToSynth(cleanText, onEnd);
+        });
+      }
+    } catch (err) {
+      fallbackToSynth(text, onEnd);
+    }
+  }, [stopSpeaking]);
+
+  const fallbackToSynth = (text: string, onEnd?: () => void) => {
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setIsSpeaking(false);
+      return;
+    }
+    try {
+      const synth = window.speechSynthesis;
       if (synth.paused) synth.resume();
       synth.cancel();
 
       const utt = new SpeechSynthesisUtterance(text);
       utt.lang = "ar-SA";
-      utt.rate = 1.05;
+      utt.rate = 1.0;
       utt.pitch = 1.0;
       utt.volume = 1.0;
 
       const voices = synth.getVoices();
-      const arabicVoice = voices.find(v => 
-        v.lang.startsWith("ar") || 
-        v.name.includes("Arabic") || 
-        v.name.includes("Maged") || 
-        v.name.includes("Tarek") ||
-        v.name.includes("Laila")
-      );
+      const arabicVoice = voices.find(v => v.lang.startsWith("ar"));
       if (arabicVoice) utt.voice = arabicVoice;
 
-      utt.onstart = () => {
-        setIsSpeaking(true);
-      };
+      utt.onstart = () => setIsSpeaking(true);
       utt.onend = () => {
         setIsSpeaking(false);
         onEnd?.();
       };
-      utt.onerror = () => {
-        setIsSpeaking(false);
-      };
+      utt.onerror = () => setIsSpeaking(false);
 
-      // Slight delay for Android Chrome speech cancel bug
-      setTimeout(() => {
-        synth.speak(utt);
-      }, 50);
+      synth.speak(utt);
     } catch (e) {
       setIsSpeaking(false);
     }
-  }, []);
-
-  const stopSpeaking = useCallback(() => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-    setIsSpeaking(false);
-  }, []);
+  };
 
   const startListening = useCallback((onResult: (t: string) => void) => {
     if (typeof window === "undefined") return;
@@ -124,7 +138,7 @@ export function useSpeech() {
     }
     try {
       stopSpeaking();
-      playChime(880, 0.15); // Beep to indicate mic is listening
+      playChime(880, 0.15);
       const rec = new SR();
       rec.lang = "ar-SA";
       rec.continuous = false;
