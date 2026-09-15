@@ -54,7 +54,7 @@ export async function analyzeWithGeminiPool(
           }],
           generationConfig: {
             temperature: 0.4,
-            maxOutputTokens: 300,
+            maxOutputTokens: 120,
           }
         })
       });
