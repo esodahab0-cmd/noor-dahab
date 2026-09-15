@@ -15,7 +15,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { adminKey } = body;
 
-    if (adminKey !== process.env.ADMIN_SECRET_KEY && adminKey !== "admin123456") {
+    if (adminKey !== process.env.ADMIN_SECRET_KEY && adminKey !== (process.env.ADMIN_PASSWORD || "NoorDahab@2024")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

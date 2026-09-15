@@ -54,7 +54,7 @@ export default function AIKeysAdminPage() {
       const res = await fetch("/api/ai/validate-keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ adminKey: "admin123456" }),
+        body: JSON.stringify({ adminKey: "NoorDahab@2024" }),
       });
       const data = await res.json();
       setTestResults(data.results || {});

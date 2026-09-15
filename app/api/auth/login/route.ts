@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
     const adminPass = process.env.ADMIN_PASSWORD || "NoorDahab@2024";
 
     // Admin Master Login
-    if ((username === adminUser || username === "admin") && (password === adminPass || password === "admin123456")) {
+    if (username === adminUser && password === adminPass) {
       const token = uuidv4();
       return NextResponse.json({
         success: true,
-        user: { username: "admin", role: "admin", name: "مدير النظام", guardianName: "", emergencyPhone: "" },
+        user: { username: "dahab", role: "admin", name: "مدير النظام (دهب)", guardianName: "", emergencyPhone: "" },
         sessionToken: token,
         redirect: "/admin"
       });
