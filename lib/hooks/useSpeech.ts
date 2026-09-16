@@ -35,17 +35,33 @@ export function useSpeech() {
     } catch (e) {}
   }, []);
 
-  // Unlock audio engine for mobile browsers
-  const unlockSpeaker = useCallback(() => {
+  // Instant silent audio unlocking for autoplay policy
+  const prepareAudioEngine = useCallback(() => {
     try {
-      playChime(587.33, 0.2);
+      if (!audioCtxRef.current) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) audioCtxRef.current = new AudioCtx();
+      }
+      if (audioCtxRef.current && audioCtxRef.current.state === "suspended") {
+        audioCtxRef.current.resume().catch(() => {});
+      }
       if (typeof window !== "undefined") {
+        // Pre-warm audio element with silent buffer
         const silentAudio = new Audio("data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA");
-        silentAudio.play().catch(() => {});
+        silentAudio.volume = 0.01;
+        silentAudio.play().then(() => {
+          silentAudio.pause();
+        }).catch(() => {});
       }
       setIsAudioUnlocked(true);
     } catch (e) {}
-  }, [playChime]);
+  }, []);
+
+  // Unlock audio engine for mobile browsers
+  const unlockSpeaker = useCallback(() => {
+    prepareAudioEngine();
+    playChime(587.33, 0.2);
+  }, [prepareAudioEngine, playChime]);
 
   // Stop any active speech (audio or synth)
   const stopSpeaking = useCallback(() => {
@@ -66,6 +82,7 @@ export function useSpeech() {
   const speak = useCallback((text: string, onEnd?: () => void) => {
     if (!text || !text.trim()) return;
     stopSpeaking();
+    prepareAudioEngine();
 
     // 1. Try High-Quality Realistic Arabic Audio Stream via /api/ai/tts
     try {
@@ -81,7 +98,6 @@ export function useSpeech() {
         onEnd?.();
       };
       audio.onerror = () => {
-        // Fallback to Web Speech Synthesis if audio stream fails
         fallbackToSynth(cleanText, onEnd);
       };
 
@@ -94,7 +110,7 @@ export function useSpeech() {
     } catch (err) {
       fallbackToSynth(text, onEnd);
     }
-  }, [stopSpeaking]);
+  }, [stopSpeaking, prepareAudioEngine]);
 
   const fallbackToSynth = (text: string, onEnd?: () => void) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
@@ -129,6 +145,9 @@ export function useSpeech() {
     }
   };
 
+  const shouldKeepListeningRef = useRef(false);
+  const onResultCallbackRef = useRef<((t: string) => void) | null>(null);
+
   const startListening = useCallback((onResult: (t: string) => void) => {
     if (typeof window === "undefined") return;
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -136,32 +155,69 @@ export function useSpeech() {
       speak("التعرف على الصوت غير مدعوم في هذا المتصفح. يرجى استخدام متصفح جوجل كروم.");
       return;
     }
-    try {
-      stopSpeaking();
-      playChime(880, 0.15);
-      const rec = new SR();
-      rec.lang = "ar-EG";
-      rec.continuous = false;
-      rec.interimResults = false;
-      rec.maxAlternatives = 1;
 
-      rec.onstart = () => setIsListening(true);
-      rec.onend = () => setIsListening(false);
-      rec.onerror = () => setIsListening(false);
-      rec.onresult = (e: any) => {
-        const t = e.results[0][0].transcript;
-        if (t) onResult(t);
-      };
+    shouldKeepListeningRef.current = true;
+    onResultCallbackRef.current = onResult;
 
-      recRef.current = rec;
-      rec.start();
-    } catch (e) {
-      setIsListening(false);
-    }
-  }, [speak, stopSpeaking, playChime]);
+    const initRecognizer = () => {
+      if (!shouldKeepListeningRef.current) return;
+      try {
+        if (recRef.current) {
+          try { recRef.current.abort(); } catch {}
+        }
+        const rec = new SR();
+        rec.lang = "ar-EG";
+        rec.continuous = false;
+        rec.interimResults = false;
+        rec.maxAlternatives = 1;
+
+        rec.onstart = () => setIsListening(true);
+        rec.onend = () => {
+          setIsListening(false);
+          // Auto-restart if user still in listening mode and not currently speaking
+          if (shouldKeepListeningRef.current) {
+            setTimeout(() => {
+              if (shouldKeepListeningRef.current) {
+                initRecognizer();
+              }
+            }, 300);
+          }
+        };
+
+        rec.onerror = (e: any) => {
+          // If silence timeout or no speech, let onend handle the auto-restart cleanly
+          if (e.error !== "no-speech") {
+            setIsListening(false);
+          }
+        };
+
+        rec.onresult = (e: any) => {
+          const t = e.results[0]?.[0]?.transcript;
+          if (t && t.trim()) {
+            shouldKeepListeningRef.current = false;
+            setIsListening(false);
+            onResultCallbackRef.current?.(t.trim());
+          }
+        };
+
+        recRef.current = rec;
+        rec.start();
+      } catch (e) {
+        setIsListening(false);
+      }
+    };
+
+    stopSpeaking();
+    prepareAudioEngine();
+    playChime(880, 0.15);
+    initRecognizer();
+  }, [speak, stopSpeaking, prepareAudioEngine, playChime]);
 
   const stopListening = useCallback(() => {
-    recRef.current?.stop();
+    shouldKeepListeningRef.current = false;
+    if (recRef.current) {
+      try { recRef.current.stop(); } catch {}
+    }
     setIsListening(false);
   }, []);
 
@@ -173,6 +229,7 @@ export function useSpeech() {
     stopListening,
     isListening,
     unlockSpeaker,
+    prepareAudioEngine,
     isAudioUnlocked,
     playChime
   };

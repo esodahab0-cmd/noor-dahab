@@ -16,6 +16,7 @@ import { AnalysisMode } from "@/lib/ai/types";
 import { PWAInstallPrompt } from "@/components/blind/PWAInstallPrompt";
 import { EmergencySOSModal } from "@/components/blind/EmergencySOSModal";
 import { saveFaceLocally, getAllSavedFaces, SavedFace } from "@/lib/utils/faces-db";
+import { scanBarcodeLocally } from "@/lib/utils/barcode";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -133,7 +134,8 @@ export default function BlindHomePage() {
     let lastErr: any = null;
 
     const attempts = [
-      { video: { facingMode: { ideal: "environment" } }, audio: false },
+      { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
+      { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
       { video: { facingMode: "environment" }, audio: false },
       { video: true, audio: false }
     ];
@@ -278,6 +280,44 @@ export default function BlindHomePage() {
     }
   };
 
+  // ── Announce Current Location Spoken Directly ────────────────
+  const announceCurrentLocation = useCallback(async () => {
+    triggerHaptic("medium");
+    playChime(660, 0.1);
+    speak("جارٍ تحديد موقعك واسم الشارع بدقة...");
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      speak("خاصية تحديد الموقع غير مدعومة في جهازك.");
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        setLocationCoords({ lat, lon });
+        try {
+          const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
+          const data = await res.json();
+          if (data.success && data.address) {
+            setLocationName(data.address);
+            const msg = `أنت متواجد حالياً في: ${data.address}`;
+            lastDescriptionRef.current = msg;
+            setCurrentResult(msg);
+            speak(msg);
+          } else {
+            speak("تم رصد إحداثيات موقعك، لكن تعذر جلب اسم الشارع حالياً.");
+          }
+        } catch {
+          speak("تعذر الاتصال بخدمة الخرائط لتحديد اسم الشارع.");
+        }
+      },
+      (err) => {
+        speak("يرجى تفعيل خدمة الـ GPS والموقع في هاتفك لسماع اسم الشارع.");
+      },
+      { enableHighAccuracy: true, timeout: 12000 }
+    );
+  }, [speak, triggerHaptic, playChime]);
+
   // ── Analyze Vision (All 11 Modes) ────────────────────────────
   const handleAnalyze = async (
     mode: AnalysisMode = "general",
@@ -315,7 +355,32 @@ export default function BlindHomePage() {
 
     try {
       if (!videoRef.current) throw new Error("الكاميرا غير جاهزة");
-      const { base64, isDark } = await compressImage(videoRef.current, 400, 0.55);
+
+      // Fast Local Barcode / QR Code Scanner (zero AI cost, instant response)
+      if (mode === "barcode") {
+        try {
+          const detectedCode = await scanBarcodeLocally(videoRef.current);
+          if (detectedCode) {
+            triggerHaptic("success");
+            playChime(523.25, 0.1);
+            const isUrl = detectedCode.startsWith("http://") || detectedCode.startsWith("https://");
+            const resultMsg = isUrl
+              ? `تم قراءة رمز الاستجابة السريعة: رابط إلكتروني إلى: ${detectedCode}`
+              : `تم قراءة الكود بنجاح: ${detectedCode}`;
+            lastDescriptionRef.current = resultMsg;
+            setCurrentResult(resultMsg);
+            speak(resultMsg);
+            setAnalyzing(false);
+            return;
+          }
+        } catch (e) {
+          console.warn("Local barcode scanner skipped, falling back to AI:", e);
+        }
+      }
+
+      // High-resolution adaptive capture (1024px for reading/currency/barcode/meds, 720px for general)
+      const captureWidth = ["read_text", "currency", "medication", "barcode", "appliance"].includes(mode) ? 1024 : 720;
+      const { base64, isDark } = await compressImage(videoRef.current, captureWidth, 0.80);
 
       // Auto-Torch if environment is dark
       if (isDark && !torchOn) {
@@ -494,9 +559,9 @@ export default function BlindHomePage() {
       else if (/عائق|طريق|قدامي|مسافة|سلم|حفرة|رصيف/.test(lower)) {
         handleAnalyze("obstacle");
       }
-      // 15. Location
-      else if (/موقع|أين أنا|مكاني|شارع|عنوان/.test(lower)) {
-        handleAnalyze("location");
+      // 15. Location & Street Voice Command
+      else if (/موقع|أين أنا|مكاني|شارع|عنوان|أنا فين|فين أنا/.test(lower)) {
+        announceCurrentLocation();
       }
       // 16. Emergency SOS
       else if (/طوارئ|استغاثة|الحقني|مساعدة/.test(lower)) {
@@ -691,10 +756,15 @@ export default function BlindHomePage() {
       {permState === "granted" && (
         <footer className="relative z-20 px-3 pb-3 pt-1 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-1.5">
           {locationName && (
-            <div className="flex items-center gap-2 text-[11px] text-gray-300 bg-black/80 border border-gray-800 px-3 py-1 rounded-xl">
-              <Navigation className="w-3 h-3 text-gold-400 shrink-0" />
-              <span className="truncate">{locationName}</span>
-            </div>
+            <button
+              onClick={announceCurrentLocation}
+              aria-label={`موقعك الحالي: ${locationName}. اضغط لسماع اسم الشارع`}
+              className="flex items-center gap-2 text-[11px] text-gray-300 bg-black/80 border border-gray-800 px-3 py-1 rounded-xl active:scale-98 text-right w-full hover:border-gold-500/40"
+            >
+              <Navigation className="w-3 h-3 text-gold-400 shrink-0 animate-pulse" />
+              <span className="truncate flex-1">{locationName}</span>
+              <span className="text-[9px] text-gold-400 shrink-0">اسمع 🔊</span>
+            </button>
           )}
 
           {/* Quick Analysis Shortcut Pills */}

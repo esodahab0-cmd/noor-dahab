@@ -1,7 +1,7 @@
 export async function compressImage(
   video: HTMLVideoElement,
-  maxWidth = 400,
-  quality = 0.55
+  maxWidth = 1024,
+  quality = 0.80
 ): Promise<{ base64: string; isDark: boolean; brightness: number }> {
   return new Promise((resolve, reject) => {
     try {
