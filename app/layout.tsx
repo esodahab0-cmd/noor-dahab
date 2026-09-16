@@ -3,9 +3,53 @@ import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
-  title: "نور دهب - رفيق المكفوفين الذكي",
-  description: "نظام ومساعد ذكي فائق السرعة لفاقدي البصر يدمج الكاميرا والصوت ونظام التموضع الجغرافي مجاناً 100%.",
+  metadataBase: new URL("https://noor-dahab.vercel.app"),
+  title: "نور دهب - رفيق المكفوفين الذكي | Dahab Software",
+  description: "نظام ومساعد بصري ذكي فائق السرعة مخصص لخدمة الأشخاص المكفوفين وضعاف البصر في مصر والوطن العربي. ابتكار وتطوير المهندس إسلام أبو دهب - شركة دهب سوفتوير.",
+  keywords: [
+    "نور دهب",
+    "تطبيق مكفوفين",
+    "الذكاء الاصطناعي للمكفوفين",
+    "مساعد بصري",
+    "دهب سوفتوير",
+    "مهندس إسلام أبو دهب",
+    "Dahab Software",
+    "Noor Dahab",
+    "Blind Assistant AI",
+    "قارئ نصوص للمكفوفين",
+    "فحص العملات المصرية"
+  ],
+  authors: [
+    { name: "المهندس إسلام أبو دهب", url: "https://dahabsoftware.com" }
+  ],
+  creator: "المهندس إسلام أبو دهب - Dahab Software",
+  publisher: "Dahab Software",
   manifest: "/manifest.json",
+  alternates: {
+    canonical: "https://noor-dahab.vercel.app"
+  },
+  openGraph: {
+    type: "website",
+    locale: "ar_EG",
+    url: "https://noor-dahab.vercel.app",
+    siteName: "نور دهب - Noor Dahab",
+    title: "نور دهب - رفيق المكفوفين الذكي | Dahab Software",
+    description: "أقوى مساعد بصري صوتي ذكي للمكفوفين يدمج الكاميرا وتحليل الذكاء الاصطناعي الفوري ومكبر الصوت مجاناً 100%.",
+    images: [
+      {
+        url: "/icons/icon-512.png",
+        width: 512,
+        height: 512,
+        alt: "شعار تطبيق نور دهب للمكفوفين"
+      }
+    ]
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "نور دهب - رفيق المكفوفين الذكي",
+    description: "مساعد بصري ذكي مخصص للمكفوفين في مصر والوطن العربي - إسلام أبو دهب",
+    images: ["/icons/icon-512.png"]
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
