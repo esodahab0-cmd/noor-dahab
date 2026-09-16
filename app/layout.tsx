@@ -25,6 +25,9 @@ export const metadata: Metadata = {
   creator: "المهندس إسلام أبو دهب - Dahab Software",
   publisher: "Dahab Software",
   manifest: "/manifest.json",
+  verification: {
+    google: "google18516c71adf2f0cd",
+  },
   alternates: {
     canonical: "https://noor-dahab.vercel.app"
   },
@@ -81,6 +84,7 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="mobile-web-app-capable" content="yes" />
         <link rel="manifest" href="/manifest.json" />
+        <meta name="google-site-verification" content="google18516c71adf2f0cd" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
