@@ -44,7 +44,8 @@ export function EmergencySOSModal({
         const msg = encodeURIComponent(
           `🚨 نداء استغاثة عاجل!\nمن تطبيق نور دهب.\nالموقع: ${locationName || "غير محدد"}\n🗺️ ${mapLink}`
         );
-        const cleanPhone = emergencyPhone.replace(/[^0-9]/g, "");
+        let cleanPhone = emergencyPhone.replace(/[^0-9]/g, "");
+   if (cleanPhone.startsWith("01") && cleanPhone.length === 11) { cleanPhone = "2" + cleanPhone; }
         speak(`جارٍ إرسال موقعك لـ ${displayGuardian} عبر واتساب.`);
         window.open(`https://wa.me/${cleanPhone}?text=${msg}`, "_blank");
         setSending(false);
@@ -52,7 +53,8 @@ export function EmergencySOSModal({
       },
       () => {
         const msg = encodeURIComponent(`🚨 نداء استغاثة عاجل من تطبيق نور دهب! أحتاج مساعدة. الموقع: ${locationName || "غير محدد"}`);
-        const cleanPhone = emergencyPhone.replace(/[^0-9]/g, "");
+        let cleanPhone = emergencyPhone.replace(/[^0-9]/g, "");
+   if (cleanPhone.startsWith("01") && cleanPhone.length === 11) { cleanPhone = "2" + cleanPhone; }
         window.open(`https://wa.me/${cleanPhone}?text=${msg}`, "_blank");
         setSending(false);
         onClose();
