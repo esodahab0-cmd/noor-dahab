@@ -2,7 +2,7 @@ export async function compressImage(
   video: HTMLVideoElement,
   maxWidth = 400,
   quality = 0.55
-): Promise<string> {
+): Promise<{ base64: string; isDark: boolean; brightness: number }> {
   return new Promise((resolve, reject) => {
     try {
       let width = video.videoWidth || 400;
@@ -16,12 +16,30 @@ export async function compressImage(
       const canvas = document.createElement("canvas");
       canvas.width = width;
       canvas.height = height;
-      const ctx = canvas.getContext("2d", { willReadFrequently: false });
+      const ctx = canvas.getContext("2d", { willReadFrequently: true });
       if (!ctx) return reject(new Error("No canvas context"));
 
       ctx.drawImage(video, 0, 0, width, height);
-      // Ultra-lightweight JPEG compression (~20-30KB) to save bandwidth and hosting resources
-      resolve(canvas.toDataURL("image/jpeg", quality));
+
+      // Analyze brightness
+      let isDark = false;
+      let brightness = 128;
+      try {
+        const imgData = ctx.getImageData(0, 0, width, height);
+        const data = imgData.data;
+        let colorSum = 0;
+        const step = 4 * 4; // Sample every 4th pixel for speed
+        let sampled = 0;
+        for (let i = 0; i < data.length; i += step) {
+          colorSum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+          sampled++;
+        }
+        brightness = Math.round(colorSum / (sampled || 1));
+        isDark = brightness < 38; // Below 38 out of 255 is dark
+      } catch (e) {}
+
+      const base64 = canvas.toDataURL("image/jpeg", quality);
+      resolve({ base64, isDark, brightness });
     } catch (e) { reject(e); }
   });
 }

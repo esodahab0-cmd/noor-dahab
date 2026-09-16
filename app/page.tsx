@@ -4,8 +4,8 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Volume2, VolumeX, Mic, Navigation, RefreshCw, LogOut,
-  Eye, FileText, Banknote, Pill, Users, AlertTriangle, Crosshair,
-  Camera, MapPin, ShieldCheck, UserPlus, UserCheck, Save, Zap
+  Eye, FileText, Banknote, Pill, Users, AlertTriangle,
+  Camera, MapPin, ShieldCheck, UserPlus, Save, Zap, Flashlight
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
@@ -22,6 +22,8 @@ export default function BlindHomePage() {
   const tapCountRef = useRef(0);
   const tapTimerRef = useRef<any>(null);
   const autoScanTimerRef = useRef<any>(null);
+  const longPressTimerRef = useRef<any>(null);
+  const isLongPressRef = useRef(false);
 
   const {
     speak,
@@ -40,14 +42,14 @@ export default function BlindHomePage() {
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
-  const [currentResult, setCurrentResult] = useState("المس الشاشة لوصف ما أمامك، أو قل أمر صوتي.");
-  const [activeTier, setActiveTier] = useState("");
+  const [currentResult, setCurrentResult] = useState("المس الشاشة لوصف ما أمامك، أو اضغط مطولاً للتحدث.");
   const [locationName, setLocationName] = useState("");
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [isSOSOpen, setIsSOSOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>({});
   const [permState, setPermState] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
 
   // Save Face Modal / Voice State
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -63,6 +65,26 @@ export default function BlindHomePage() {
 
   useEffect(() => { loadFaces(); }, [loadFaces]);
 
+  // ── Torch / Flashlight Controller ────────────────────────────
+  const setTorch = useCallback(async (state: boolean, notify = true) => {
+    try {
+      const track = streamRef.current?.getVideoTracks()[0];
+      if (track && "applyConstraints" in track) {
+        const capabilities = (track.getCapabilities?.() || {}) as any;
+        if (capabilities.torch) {
+          await (track as any).applyConstraints({ advanced: [{ torch: state }] });
+          setTorchOn(state);
+          if (notify) {
+            triggerHaptic("medium");
+            speak(state ? "تم تشغيل كشاف الكاميرا." : "تم إطفاء الكشاف.");
+          }
+          return true;
+        }
+      }
+    } catch (e) {}
+    return false;
+  }, [speak, triggerHaptic]);
+
   // ── Speaker Unlock Handler ───────────────────────────────────
   const handleUnlockSpeaker = () => {
     unlockSpeaker();
@@ -72,7 +94,7 @@ export default function BlindHomePage() {
     }, 150);
   };
 
-  // ── Robust Camera Initialization (Direct User Gesture) ────────
+  // ── Robust Camera Initialization ─────────────────────────────
   const requestPermissions = async () => {
     setPermState("requesting");
     setCameraError("");
@@ -86,7 +108,6 @@ export default function BlindHomePage() {
       return;
     }
 
-    // Stop existing stream if any
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(t => t.stop());
       streamRef.current = null;
@@ -95,7 +116,6 @@ export default function BlindHomePage() {
     let stream: MediaStream | null = null;
     let lastErr: any = null;
 
-    // Try back camera first, then any camera
     const attempts = [
       { video: { facingMode: { ideal: "environment" } }, audio: false },
       { video: { facingMode: "environment" }, audio: false },
@@ -144,10 +164,9 @@ export default function BlindHomePage() {
     setPermState("granted");
 
     setTimeout(() => {
-      speak("تم تشغيل الكاميرا بنجاح. نور دهب في خدمتك الآن. المس الشاشة في أي مكان أو قل أمر صوتي.");
+      speak("تم تشغيل الكاميرا بنجاح. نور دهب في خدمتك الآن. المس الشاشة في أي مكان أو اضغط مطولاً للتحدث.");
     }, 200);
 
-    // Geolocation in background
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (pos) => {
@@ -188,7 +207,7 @@ export default function BlindHomePage() {
     }
     triggerHaptic("medium");
     try {
-      const base64 = await compressImage(videoRef.current, 400, 0.55);
+      const { base64 } = await compressImage(videoRef.current, 400, 0.55);
       setCapturedFaceBase64(base64);
       setIsSaveModalOpen(true);
       speak("تم التقاط الصورة. تفضل بنطق اسم هذا الشخص بصوتك الآن.");
@@ -221,7 +240,7 @@ export default function BlindHomePage() {
     }
   };
 
-  // ── Analyze Vision (Ultra-Fast 512px) ───────────────────────
+  // ── Analyze Vision with Auto-Torch & Audio Cues ─────────────
   const handleAnalyze = async (
     mode: "general" | "read_text" | "currency" | "location" | "medication" | "faces" | "obstacle" = "general",
     silentPrompt = false
@@ -233,7 +252,7 @@ export default function BlindHomePage() {
     }
 
     triggerHaptic("light");
-    playChime(660, 0.1);
+    playChime(660, 0.1); // Capture Audio Cue
     setAnalyzing(true);
     stopSpeaking();
 
@@ -252,7 +271,13 @@ export default function BlindHomePage() {
 
     try {
       if (!videoRef.current) throw new Error("الكاميرا غير جاهزة");
-      const base64 = await compressImage(videoRef.current, 400, 0.55);
+      const { base64, isDark } = await compressImage(videoRef.current, 400, 0.55);
+
+      // Auto-Torch if environment is dark
+      if (isDark && !torchOn) {
+        setTorch(true, false);
+      }
+
       const user = JSON.parse(localStorage.getItem("noor_user") || "{}");
       const token = localStorage.getItem("noor_session_token") || "";
       const registeredFaces = savedFaces.map(f => ({ name: f.name, description: f.relation || "شخص مقرب" }));
@@ -275,9 +300,19 @@ export default function BlindHomePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.text || data.error || "تعذر التحليل");
 
-      triggerHaptic("success");
+      // Check if response contains a safety hazard / obstacle alert
+      const isObstacleOrRisk = /خطر|عائق|انتبه|حفرة|سلم|عقبة|باب مغلق|سيارة|احذر/.test(data.text);
+      if (isObstacleOrRisk) {
+        triggerHaptic("error");
+        // Distinct double warning beep
+        playChime(880, 0.15);
+        setTimeout(() => playChime(440, 0.25), 180);
+      } else {
+        triggerHaptic("success");
+        playChime(523.25, 0.1); // Success chime
+      }
+
       setCurrentResult(data.text);
-      setActiveTier(data.provider || "gemini");
       speak(data.text);
     } catch (err: any) {
       triggerHaptic("error");
@@ -289,10 +324,10 @@ export default function BlindHomePage() {
     }
   };
 
-  // ── Auto Scan Mode ("اول ما يري شئ يوصفه") ───────────────────
+  // ── Auto Scan Mode ──────────────────────────────────────────
   useEffect(() => {
     if (autoScanEnabled && cameraReady) {
-      speak("تم تفعيل الوصف التلقائي المستمر. سأصف ما أمامك كل بضع ثوانٍ.");
+      speak("تم تفعيل الوصف التلقائي المستمر.");
       autoScanTimerRef.current = setInterval(() => {
         handleAnalyze("general", true);
       }, 6500);
@@ -302,8 +337,25 @@ export default function BlindHomePage() {
     return () => clearInterval(autoScanTimerRef.current);
   }, [autoScanEnabled, cameraReady]);
 
-  // ── Center Tap with SOS (4 taps) ────────────────────────────
+  // ── Full-Screen Long Press & Tap Gesture Handlers ───────────
+  const handlePointerDown = () => {
+    isLongPressRef.current = false;
+    clearTimeout(longPressTimerRef.current);
+    if (permState === "granted") {
+      longPressTimerRef.current = setTimeout(() => {
+        isLongPressRef.current = true;
+        triggerHaptic("medium");
+        handleVoiceCommand();
+      }, 550); // 550ms hold = Voice Command Mode
+    }
+  };
+
+  const handlePointerUp = () => {
+    clearTimeout(longPressTimerRef.current);
+  };
+
   const handleCenterTap = () => {
+    if (isLongPressRef.current) return;
     if (!isAudioUnlocked) unlockSpeaker();
     if (permState !== "granted") {
       requestPermissions();
@@ -342,6 +394,12 @@ export default function BlindHomePage() {
         setCurrentResult("المطور: المهندس إسلام أبو دهب • Dahab Software");
         speak(creatorMsg);
       }
+      else if (/كشاف|فلاش|نور|شغل الكشاف|شغل الفلاش/.test(lower) && !/اطفي|إطفاء|اقفل/.test(lower)) {
+        setTorch(true);
+      }
+      else if (/اطفي الكشاف|اقفل الكشاف|اطفي الفلاش|إطفاء النور/.test(lower)) {
+        setTorch(false);
+      }
       else if (/احفظ|سجل|تذكر|صورة شخص/.test(lower)) {
         triggerSaveFace();
       }
@@ -378,7 +436,7 @@ export default function BlindHomePage() {
   // ─────────────────────────────────────────────────────────────
   return (
     <main className="fixed inset-0 bg-black flex flex-col justify-between overflow-hidden select-none touch-none">
-      {/* Live Camera Feed (High Visibility) */}
+      {/* Live Camera Feed */}
       <video
         ref={videoRef}
         playsInline
@@ -408,6 +466,22 @@ export default function BlindHomePage() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Torch Toggle Button */}
+          {permState === "granted" && (
+            <button
+              onClick={() => setTorch(!torchOn)}
+              className={`p-1.5 rounded-xl border transition-all ${
+                torchOn
+                  ? "bg-amber-400 text-dark-900 border-amber-300 shadow-lg shadow-amber-400/50"
+                  : "bg-dark-800 text-gray-300 border-gray-700"
+              }`}
+              title="تشغيل/إطفاء الكشاف"
+              aria-label="الكشاف"
+            >
+              <Flashlight className="w-4 h-4" />
+            </button>
+          )}
+
           {/* Auto Scan Toggle */}
           <button
             onClick={() => setAutoScanEnabled(!autoScanEnabled)}
@@ -418,7 +492,7 @@ export default function BlindHomePage() {
             }`}
           >
             <Zap className="w-3.5 h-3.5 text-gold-400" />
-            {autoScanEnabled ? "وصف مستمر ⚡" : "وصف تلقائي"}
+            {autoScanEnabled ? "مستمر ⚡" : "تلقائي"}
           </button>
 
           {/* SOS */}
@@ -439,7 +513,7 @@ export default function BlindHomePage() {
       {/* PWA Install Banner */}
       <PWAInstallPrompt />
 
-      {/* CENTER: Permissions / Scan Area (Non-nested valid HTML) */}
+      {/* CENTER: Permissions / Interactive Touch Area */}
       {permState !== "granted" ? (
         <div className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center">
           {permState === "idle" && (
@@ -494,25 +568,30 @@ export default function BlindHomePage() {
         <div
           role="button"
           tabIndex={0}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerLeave={handlePointerUp}
           onClick={handleCenterTap}
-          aria-label="المس الشاشة لوصف فوري أو 4 نقرات للطوارئ"
+          aria-label="المس الشاشة لوصف فوري أو اضغط مطولاً للتحدث أو 4 نقرات للطوارئ"
           className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform"
         >
           <div className={`w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-3 ${
-            analyzing ? "border-blue-400 bg-blue-500/30" : "border-gold-400 bg-gold-500/30 gold-glow"
+            analyzing ? "border-blue-400 bg-blue-500/30" : isListening ? "border-red-400 bg-red-500/30 animate-pulse" : "border-gold-400 bg-gold-500/30 gold-glow"
           }`}>
             {analyzing
               ? <RefreshCw className="w-12 h-12 text-blue-300 animate-spin" />
+              : isListening
+              ? <Mic className="w-12 h-12 text-red-400 animate-bounce" />
               : <Eye className="w-12 h-12 text-gold-400 animate-pulse" />
             }
           </div>
 
           <p className="text-lg font-black text-white max-w-sm leading-relaxed px-4 py-2 bg-black/85 rounded-2xl border border-gold-500/30 text-center shadow-lg">
-            {analyzing ? "جارٍ التحليل السريع..." : currentResult}
+            {analyzing ? "جارٍ التحليل السريع..." : isListening ? "أسمعك الآن، تفضل بالتحدث..." : currentResult}
           </p>
 
           <span className="mt-2 text-[11px] font-bold text-gold-300/90 bg-black/70 px-3 py-1 rounded-full border border-white/10">
-            المس الشاشة لوصف فوري • أو اضغط "أمر صوتي"
+            نقرة واحدة للوصف • ضغط مطول للتحدث • 4 نقرات للطوارئ
           </span>
         </div>
       )}
@@ -557,7 +636,7 @@ export default function BlindHomePage() {
                   : "bg-gold-500/25 border-gold-500 text-gold-300 active:scale-95"
               }`}>
               <Mic className="w-4 h-4" />
-              {isListening ? "أسمعك الآن..." : "أمر صوتي 🎙️"}
+              {isListening ? "أسمعك..." : "أمر صوتي 🎙️"}
             </button>
 
             <button onClick={stopSpeaking}
