@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from "react";
+import { calculateCompassDirection, CompassHeading } from "@/lib/utils/compass";
 
 interface UseDeviceSensorsOptions {
   onShake?: () => void;
@@ -119,6 +120,35 @@ export function useDeviceSensors(options?: UseDeviceSensorsOptions) {
     return () => window.removeEventListener("devicemotion", handleMotion);
   }, [options]);
 
+  // 4. Compass Orientation Tracking
+  const [compass, setCompass] = useState<CompassHeading>({
+    degrees: 0,
+    directionAr: "الشمال",
+    shortLabel: "شمال"
+  });
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleOrientation = (e: DeviceOrientationEvent) => {
+      let heading: number | null = null;
+
+      if ("webkitCompassHeading" in e && typeof (e as any).webkitCompassHeading === "number") {
+        heading = (e as any).webkitCompassHeading;
+      } else if (e.alpha !== null) {
+        heading = (360 - e.alpha) % 360;
+      }
+
+      if (heading !== null && !isNaN(heading)) {
+        const info = calculateCompassDirection(heading);
+        setCompass(info);
+      }
+    };
+
+    window.addEventListener("deviceorientation", handleOrientation, true);
+    return () => window.removeEventListener("deviceorientation", handleOrientation, true);
+  }, []);
+
   // Toggle OLED blackout battery saver
   const toggleBlackoutMode = useCallback(() => {
     setIsBlackoutMode((prev) => !prev);
@@ -132,5 +162,6 @@ export function useDeviceSensors(options?: UseDeviceSensorsOptions) {
     isBlackoutMode,
     setIsBlackoutMode,
     toggleBlackoutMode,
+    compass
   };
 }

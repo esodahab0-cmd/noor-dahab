@@ -7,7 +7,7 @@ import {
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
   Camera, ShieldCheck, UserPlus, Save, Zap, Flashlight,
   Shirt, Search, Monitor, Bus, QrCode, RotateCcw,
-  Moon, Gauge, WifiOff
+  Moon, Gauge, WifiOff, Compass
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
@@ -75,6 +75,7 @@ export default function BlindHomePage() {
     requestWakeLock,
     isBlackoutMode,
     toggleBlackoutMode,
+    compass,
   } = useDeviceSensors({
     onShake: () => {
       if (permState === "granted" && !analyzing && !isListening) {
@@ -92,6 +93,33 @@ export default function BlindHomePage() {
       }
     }
   });
+
+  // ── Audio Compass Announcer ──────────────────────────────────
+  const announceCompassDirection = useCallback(() => {
+    triggerHaptic("medium");
+    playChime(660, 0.1);
+    const locationPart = locationName ? ` في ${locationName}` : "";
+    const msg = `أنت متجه الآن نحو ${compass.directionAr}، بزاوية ${compass.degrees} درجة${locationPart}.`;
+    setCurrentResult(msg);
+    speak(msg);
+  }, [compass, locationName, triggerHaptic, playChime, speak]);
+
+  // ── Walking Companion Co-Pilot Mode ──────────────────────────
+  const [companionMode, setCompanionMode] = useState(false);
+  const companionTimerRef = useRef<any>(null);
+
+  const toggleCompanionMode = useCallback(() => {
+    setCompanionMode((prev) => {
+      const next = !prev;
+      triggerHaptic("medium");
+      if (next) {
+        speak("تم تفعيل رفيق الطريق. سأرافقك وأصف لك مسار السير خطوة بخطوة باستمرار.");
+      } else {
+        speak("تم إيقاف وضع رفيق الطريق.");
+      }
+      return next;
+    });
+  }, [speak, triggerHaptic]);
 
   // ── Local Real-Time Hazard Radar (Zero-latency offline) ─────────
   useEffect(() => {
@@ -424,6 +452,7 @@ export default function BlindHomePage() {
         appliance: "أقرأ شاشة الجهاز والأرقام...",
         transit: "أرصد لافتة المواصلات والأتوبيس...",
         barcode: "أقرأ باركود وبيانات المنتج...",
+        companion: "أرافقك في الطريق...",
       };
       speak(labels[mode] || "أفحص الصورة...");
     }
@@ -466,6 +495,11 @@ export default function BlindHomePage() {
       const token = localStorage.getItem("noor_session_token") || "";
       const registeredFaces = savedFaces.map(f => ({ name: f.name, description: f.relation || "شخص مقرب" }));
 
+      const locationWithCompass = [
+        locationName,
+        compass?.directionAr ? `متجه نحو ${compass.directionAr} (${compass.degrees} درجة)` : ""
+      ].filter(Boolean).join(" • ");
+
       const res = await fetch("/api/ai/analyze", {
         method: "POST",
         headers: {
@@ -476,7 +510,7 @@ export default function BlindHomePage() {
         body: JSON.stringify({
           imageBase64: base64,
           mode,
-          locationInfo: { addressText: locationName },
+          locationInfo: { addressText: locationWithCompass },
           registeredFaces,
           userQuestion,
         }),
@@ -521,6 +555,19 @@ export default function BlindHomePage() {
     }
     return () => clearInterval(autoScanTimerRef.current);
   }, [autoScanEnabled, cameraReady, activeMode]);
+
+  // ── Walking Companion Co-Pilot Continuous Loop ───────────────
+  useEffect(() => {
+    if (companionMode && cameraReady) {
+      companionTimerRef.current = setInterval(() => {
+        if (!videoRef.current || analyzing || isListening || isSpeaking) return;
+        handleAnalyze("companion", true);
+      }, 4800);
+    } else {
+      clearInterval(companionTimerRef.current);
+    }
+    return () => clearInterval(companionTimerRef.current);
+  }, [companionMode, cameraReady, analyzing, isListening, isSpeaking]);
 
   // ── Full-Screen Long Press & Tap Handlers ───────────────────
   const handlePointerDown = () => {
@@ -610,6 +657,22 @@ export default function BlindHomePage() {
       // 4. Location & Street Voice Command
       if (/موقع|أين أنا|مكاني|شارع|عنوان|أنا فين|فين أنا/.test(lower)) {
         announceCurrentLocation();
+        return;
+      }
+
+      // 4.1 Compass Heading & Direction
+      if (/بوصلة|اتجاه|متجه فين|رايح فين|فين القبلة|شمال ولا جنوب|قبلة/.test(lower)) {
+        announceCompassDirection();
+        return;
+      }
+
+      // 4.2 Companion Mode (رفيق الطريق والمرافقة المستمرة)
+      if (/شغل رفيق الطريق|رفيق الطريق|امشي معايا|خليك معايا|مرافق/.test(lower) && !/اطفي|إطفاء|اقفل|وقف/.test(lower)) {
+        if (!companionMode) toggleCompanionMode();
+        return;
+      }
+      if (/اطفي رفيق الطريق|اقفل رفيق الطريق|وقف رفيق الطريق|كفاية رفيق/.test(lower)) {
+        if (companionMode) toggleCompanionMode();
         return;
       }
 
@@ -791,6 +854,36 @@ export default function BlindHomePage() {
           >
             <Moon className="w-4 h-4" />
           </button>
+
+          {/* Compass Heading Button */}
+          {permState === "granted" && (
+            <button
+              onClick={announceCompassDirection}
+              className="px-2 py-1 bg-dark-800 text-cyan-300 border border-cyan-500/40 rounded-xl text-xs font-bold flex items-center gap-1 active:scale-95 hover:border-cyan-400"
+              title="البوصلة الصوتية والاتجاهات"
+              aria-label={`البوصلة: متجه ${compass.directionAr}. اضغط لسماع الاتجاه`}
+            >
+              <Compass className="w-3.5 h-3.5 text-cyan-400" />
+              <span className="text-[10px]">{compass.shortLabel}</span>
+            </button>
+          )}
+
+          {/* Companion Co-Pilot Button */}
+          {permState === "granted" && (
+            <button
+              onClick={toggleCompanionMode}
+              className={`px-2 py-1 rounded-xl text-xs font-black flex items-center gap-1 border transition-all active:scale-95 ${
+                companionMode
+                  ? "bg-emerald-600 text-white border-emerald-400 shadow-lg shadow-emerald-500/30 animate-pulse"
+                  : "bg-dark-800 text-emerald-400 border-emerald-500/40"
+              }`}
+              title="رفيق الطريق والمرافقة المستمرة"
+              aria-label="وضع رفيق الطريق"
+            >
+              <span>🚶‍♂️</span>
+              <span className="text-[10px]">{companionMode ? "الرفيق ⚡" : "الرفيق"}</span>
+            </button>
+          )}
 
           {/* Repeat Button */}
           {permState === "granted" && (
