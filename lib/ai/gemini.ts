@@ -9,7 +9,13 @@ export async function analyzeWithGemini(
   const genAI = new GoogleGenerativeAI(apiKey);
   
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    generationConfig: {
+      temperature: 0.2,
+      maxOutputTokens: 600,
+    }
+  });
 
   const result = await model.generateContent([
     prompt,

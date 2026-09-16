@@ -180,9 +180,20 @@ export default function BlindHomePage() {
 
     setCameraReady(true);
     setPermState("granted");
+    unlockSpeaker();
+
+    // Pre-request microphone permission so voice commands work instantly without extra prompts
+    try {
+      if (navigator.mediaDevices?.getUserMedia) {
+        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        audioStream.getTracks().forEach(t => t.stop());
+      }
+    } catch (micErr) {
+      console.warn("Microphone initial permission warmup:", micErr);
+    }
 
     setTimeout(() => {
-      speak("تم تشغيل الكاميرا بنجاح. نور دهب في خدمتك الآن. المس الشاشة في أي مكان أو اضغط مطولاً للتحدث.");
+      speak("تم تشغيل الكاميرا والميكروفون بنجاح. نور دهب في خدمتك الآن. المس الشاشة للوصف أو اضغط تحدث لأي سؤال.");
     }, 200);
 
     if (navigator.geolocation) {
@@ -321,7 +332,8 @@ export default function BlindHomePage() {
   // ── Analyze Vision (All 11 Modes) ────────────────────────────
   const handleAnalyze = async (
     mode: AnalysisMode = "general",
-    silentPrompt = false
+    silentPrompt = false,
+    userQuestion?: string
   ) => {
     if (analyzing) return;
     if (!cameraReady) {
@@ -335,10 +347,10 @@ export default function BlindHomePage() {
     setAnalyzing(true);
     stopSpeaking();
 
-    if (!silentPrompt) {
+    if (!silentPrompt && !userQuestion) {
       const labels: Record<AnalysisMode, string> = {
         general: "أرى الآن...",
-        read_text: "أقرأ النصوص...",
+        read_text: "أقرأ لك محتوى الورقة والكتابة بدقة...",
         currency: "أعد النقود وأحسب المبلغ...",
         medication: "أفحص الدواء والروشتة...",
         faces: "أتعرف على الشخص...",
@@ -378,9 +390,9 @@ export default function BlindHomePage() {
         }
       }
 
-      // High-resolution adaptive capture (1024px for reading/currency/barcode/meds, 720px for general)
-      const captureWidth = ["read_text", "currency", "medication", "barcode", "appliance"].includes(mode) ? 1024 : 720;
-      const { base64, isDark } = await compressImage(videoRef.current, captureWidth, 0.80);
+      // High-resolution adaptive capture (1024px for reading/currency/barcode/meds or custom question, 720px for general)
+      const captureWidth = ["read_text", "currency", "medication", "barcode", "appliance"].includes(mode) || !!userQuestion ? 1024 : 720;
+      const { base64, isDark } = await compressImage(videoRef.current, captureWidth, 0.82);
 
       // Auto-Torch if environment is dark
       if (isDark && !torchOn) {
@@ -403,6 +415,7 @@ export default function BlindHomePage() {
           mode,
           locationInfo: { addressText: locationName },
           registeredFaces,
+          userQuestion,
         }),
       });
 
@@ -489,91 +502,139 @@ export default function BlindHomePage() {
   const handleVoiceCommand = () => {
     unlockSpeaker();
     if (permState !== "granted") {
-      speak("يرجى تشغيل الكاميرا أولاً بالضغط على زر البدء.");
+      speak("يرجى تشغيل الكاميرا والميكروفون أولاً بالضغط على زر البدء.");
       return;
     }
-    triggerHaptic("light");
-    speak("أسمعك الآن، تفضل بالتحدث...");
+    stopSpeaking();
+    triggerHaptic("medium");
+    playChime(784, 0.12);
+    setCurrentResult("🎙️ أسمعك الآن... تفضل بالتحدث");
+
     startListening((transcript) => {
-      triggerHaptic("medium");
-      const lower = transcript.toLowerCase();
+      triggerHaptic("success");
+      playChime(880, 0.1);
+      const cleanTranscript = transcript.trim();
+      const lower = cleanTranscript.toLowerCase();
+
+      setCurrentResult(`سمعتك تقول: "${cleanTranscript}"`);
 
       // 1. Repeat last description
       if (/أعد|كرر|قول تاني|سمعني تاني|قل مرة أخرى|تاني|إعادة/.test(lower)) {
         handleRepeatLast();
+        return;
       }
+
       // 2. Creator credits
-      else if (/مين صاحب|صاحب الموقع|صاحب الفكرة|مين صنعك|مين طورك|مين برمجك|مين عملك|إسلام|اسلام|دهب سوفتوير|المطور/.test(lower)) {
-        const creatorMsg = "مبتكر ومطور تطبيق نور دهب وصاحب الفكرة هو المهندس إسلام أبو دهب، والتطبيق تابع لشركة دهب سوفتوير. يمكنك زيارة موقع الشركة عبر الرابط أسفل الشاشة.";
+      if (/مين صاحب|صاحب الموقع|صاحب الفكرة|مين صنعك|مين طورك|مين برمجك|مين عملك|إسلام|اسلام|دهب سوفتوير|المطور/.test(lower)) {
+        const creatorMsg = "مبتكر ومطور تطبيق نور دهب وصاحب الفكرة هو المهندس إسلام أبو دهب، والتطبيق تابع لشركة دهب سوفتوير Dahab Software.";
         setCurrentResult("المطور: المهندس إسلام أبو دهب • Dahab Software");
         speak(creatorMsg);
+        return;
       }
+
       // 3. Torch controls
-      else if (/كشاف|فلاش|نور|شغل الكشاف|شغل الفلاش/.test(lower) && !/اطفي|إطفاء|اقفل/.test(lower)) {
+      if (/كشاف|فلاش|نور|شغل الكشاف|شغل الفلاش/.test(lower) && !/اطفي|إطفاء|اقفل/.test(lower)) {
         setTorch(true);
+        speak("تم تشغيل الكشاف.");
+        return;
       }
-      else if (/اطفي الكشاف|اقفل الكشاف|اطفي الفلاش|إطفاء النور/.test(lower)) {
+      if (/اطفي الكشاف|اقفل الكشاف|اطفي الفلاش|إطفاء النور/.test(lower)) {
         setTorch(false);
+        speak("تم إطفاء الكشاف.");
+        return;
       }
-      // 4. Colors & Fashion
-      else if (/لون|ألوان|ملابس|قميص|بنطلون|فستان|طقم|بدلة|متناسق|لابس ايه/.test(lower)) {
-        handleAnalyze("colors");
-      }
-      // 5. Find Object
-      else if (/دور|ابحث|فين|أين|مفاتيح|محفظة|نظارة|عصا|ريموت/.test(lower)) {
-        handleAnalyze("find_object");
-      }
-      // 6. Appliance & Screens
-      else if (/شاشة|ميكروويف|غسالة|تكييف|سكر|ضغط|حرارة|درجة/.test(lower)) {
-        handleAnalyze("appliance");
-      }
-      // 7. Transit & Buses
-      else if (/أتوبيس|اتوبيس|ميكروباص|مواصلات|عربية|خط|محطة|رايح فين/.test(lower)) {
-        handleAnalyze("transit");
-      }
-      // 8. Barcode & Products
-      else if (/باركود|كود|منتج|علبة|سعر|صلاحية/.test(lower)) {
-        handleAnalyze("barcode");
-      }
-      // 9. Save Face
-      else if (/احفظ|سجل شخص|تذكر|صورة شخص/.test(lower)) {
-        triggerSaveFace();
-      }
-      // 10. Text & Signs
-      else if (/نص|اقرأ|كلمة|ورقة|كتابة|لافتة|يافطة/.test(lower)) {
-        handleAnalyze("read_text");
-      }
-      // 11. Currency Counting
-      else if (/فلوس|عملة|جنيه|ريال|دولار|نقود|عد|احسب|باقي|فكة/.test(lower)) {
-        handleAnalyze("currency");
-      }
-      // 12. Medication & Scripts
-      else if (/دواء|علاج|روشتة|علبة دواء|تاريخ/.test(lower)) {
-        handleAnalyze("medication");
-      }
-      // 13. Faces identification
-      else if (/مين|شخص|صاحبي|وجه|أمامي|من هذا/.test(lower)) {
-        handleAnalyze("faces");
-      }
-      // 14. Obstacles
-      else if (/عائق|طريق|قدامي|مسافة|سلم|حفرة|رصيف/.test(lower)) {
-        handleAnalyze("obstacle");
-      }
-      // 15. Location & Street Voice Command
-      else if (/موقع|أين أنا|مكاني|شارع|عنوان|أنا فين|فين أنا/.test(lower)) {
+
+      // 4. Location & Street Voice Command
+      if (/موقع|أين أنا|مكاني|شارع|عنوان|أنا فين|فين أنا/.test(lower)) {
         announceCurrentLocation();
+        return;
       }
-      // 16. Emergency SOS
-      else if (/طوارئ|استغاثة|الحقني|مساعدة/.test(lower)) {
+
+      // 5. Emergency SOS
+      if (/طوارئ|استغاثة|الحقني|مساعدة|اس او اس/.test(lower)) {
         setIsSOSOpen(true);
+        speak("تم فتح نداء الاستغاثة والطوارئ.");
+        return;
       }
-      // 17. Stop speaking
-      else if (/اسكت|وقف|صمت|كفاية/.test(lower)) {
+
+      // 6. Stop speaking
+      if (/اسكت|وقف|صمت|كفاية|بس/.test(lower)) {
         stopSpeaking();
+        return;
       }
-      else {
-        handleAnalyze("general");
+
+      // 7. Reading Paper / Document / Text
+      if (/ورقة|اقرأ|نص|كتابة|مكتوب|خطاب|تقرير|فاتورة|روشتة|شيك|كتاب|رسالة/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص الورقة وقراءة المكتوب بدقة...`);
+        handleAnalyze("read_text", true, cleanTranscript);
+        return;
       }
+
+      // 8. Currency Counting
+      if (/فلوس|عملة|جنيه|ريال|دولار|نقود|عد|احسب|باقي|فكة|كام دول|كام جنيه/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص العملات وحساب المبلغ...`);
+        handleAnalyze("currency", true, cleanTranscript);
+        return;
+      }
+
+      // 9. Colors & Fashion
+      if (/لون|ألوان|ملابس|قميص|بنطلون|فستان|طقم|بدلة|متناسق|لابس ايه/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص ألوان وتناسق الملابس...`);
+        handleAnalyze("colors", true, cleanTranscript);
+        return;
+      }
+
+      // 10. Find Object
+      if (/دور|ابحث|فين|أين|مفاتيح|محفظة|نظارة|عصا|ريموت|تليفون|موبايل/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ البحث عن الشيء المفقود...`);
+        handleAnalyze("find_object", true, cleanTranscript);
+        return;
+      }
+
+      // 11. Appliance & Screens
+      if (/شاشة|ميكروويف|غسالة|تكييف|سكر|ضغط|حرارة|درجة/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ قراءة الشاشة والأرقام...`);
+        handleAnalyze("appliance", true, cleanTranscript);
+        return;
+      }
+
+      // 12. Transit & Buses
+      if (/أتوبيس|اتوبيس|ميكروباص|مواصلات|عربية|خط|محطة|رايح فين/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص لافتة المواصلات...`);
+        handleAnalyze("transit", true, cleanTranscript);
+        return;
+      }
+
+      // 13. Barcode & Products
+      if (/باركود|كود|منتج|علبة|سعر|صلاحية/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص المنتج والباركود...`);
+        handleAnalyze("barcode", true, cleanTranscript);
+        return;
+      }
+
+      // 14. Save Face
+      if (/احفظ|سجل شخص|تذكر|صورة شخص/.test(lower)) {
+        triggerSaveFace();
+        return;
+      }
+
+      // 15. Faces identification
+      if (/مين|شخص|صاحبي|وجه|أمامي|من هذا|مين ده/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ التعرف على الشخص أمامك...`);
+        handleAnalyze("faces", true, cleanTranscript);
+        return;
+      }
+
+      // 16. Obstacles
+      if (/عائق|طريق|قدامي|مسافة|سلم|حفرة|رصيف|خطر/.test(lower)) {
+        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص الطريق والعوائق...`);
+        handleAnalyze("obstacle", true, cleanTranscript);
+        return;
+      }
+
+      // 17. ANY OTHER NATURAL QUESTION (e.g. "ايه اللي قدامي ده", "العلبة دي ايه", "شايف ايه"):
+      speak(`سمعتك: "${cleanTranscript}". جارٍ الفحص والإجابة...`);
+      handleAnalyze("general", true, cleanTranscript);
     });
   };
 

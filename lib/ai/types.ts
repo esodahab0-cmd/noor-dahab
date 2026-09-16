@@ -23,6 +23,7 @@ export interface AIAnalysisRequest {
     addressText?: string;
   };
   customPrompt?: string;
+  userQuestion?: string;
 }
 
 export interface AIAnalysisResponse {

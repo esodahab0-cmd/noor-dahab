@@ -40,9 +40,9 @@ export async function analyzeWithCloudflarePool(
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          prompt,
+          prompt: `مهم جداً: الإجابة باللغة العربية الفصحى البسيطة فقط بدون أي إنجليزية وبدون ماركداون:\n${prompt}`,
           image: imageArray,
-          max_tokens: 300
+          max_tokens: 600
         })
       });
 

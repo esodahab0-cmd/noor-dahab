@@ -164,6 +164,7 @@ export function useSpeech() {
       try {
         if (recRef.current) {
           try { recRef.current.abort(); } catch {}
+          recRef.current = null;
         }
         const rec = new SR();
         rec.lang = "ar-EG";
@@ -171,10 +172,13 @@ export function useSpeech() {
         rec.interimResults = false;
         rec.maxAlternatives = 1;
 
-        rec.onstart = () => setIsListening(true);
+        rec.onstart = () => {
+          setIsListening(true);
+        };
+
         rec.onend = () => {
           setIsListening(false);
-          // Auto-restart if user still in listening mode and not currently speaking
+          // Auto-restart if user still in listening mode and not aborted
           if (shouldKeepListeningRef.current) {
             setTimeout(() => {
               if (shouldKeepListeningRef.current) {
@@ -185,7 +189,19 @@ export function useSpeech() {
         };
 
         rec.onerror = (e: any) => {
-          // If silence timeout or no speech, let onend handle the auto-restart cleanly
+          console.warn("Speech recognition error:", e.error);
+          if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+            shouldKeepListeningRef.current = false;
+            setIsListening(false);
+            speak("يرجى تفعيل إذن الميكروفون من إعدادات المتصفح للتمكن من التحدث.");
+            return;
+          }
+          if (e.error === "network") {
+            shouldKeepListeningRef.current = false;
+            setIsListening(false);
+            speak("تعذر الاتصال بخدمة الصوت. يرجى التحقق من اتصال الإنترنت.");
+            return;
+          }
           if (e.error !== "no-speech") {
             setIsListening(false);
           }
@@ -196,12 +212,22 @@ export function useSpeech() {
           if (t && t.trim()) {
             shouldKeepListeningRef.current = false;
             setIsListening(false);
+            try { rec.stop(); } catch {}
             onResultCallbackRef.current?.(t.trim());
           }
         };
 
         recRef.current = rec;
-        rec.start();
+        try {
+          rec.start();
+        } catch (startErr) {
+          console.warn("Recognizer start failed, retrying:", startErr);
+          setTimeout(() => {
+            if (shouldKeepListeningRef.current) {
+              try { rec.start(); } catch {}
+            }
+          }, 200);
+        }
       } catch (e) {
         setIsListening(false);
       }
@@ -209,8 +235,8 @@ export function useSpeech() {
 
     stopSpeaking();
     prepareAudioEngine();
-    playChime(880, 0.15);
-    initRecognizer();
+    playChime(880, 0.12);
+    setTimeout(initRecognizer, 150);
   }, [speak, stopSpeaking, prepareAudioEngine, playChime]);
 
   const stopListening = useCallback(() => {

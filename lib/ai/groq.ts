@@ -16,6 +16,10 @@ export async function analyzeWithGroq(
     model: "llama-3.2-11b-vision-preview",
     messages: [
       {
+        role: "system",
+        content: "أنت المساعد البصري 'نور دهب' لخدمة المكفوفين. يجب أن تجيب باللغة العربية الفصحى البسيطة حصراً وبدون أي كلمة إنجليزية إطلاقاً وبدون أي رموز ماركداون."
+      },
+      {
         role: "user",
         content: [
           { type: "text", text: prompt },
@@ -26,8 +30,8 @@ export async function analyzeWithGroq(
         ]
       }
     ],
-    temperature: 0.3,
-    max_tokens: 300,
+    temperature: 0.2,
+    max_tokens: 600,
   });
 
   const text = completion.choices[0]?.message?.content || "لم يتم استخراج وصف.";

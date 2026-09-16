@@ -28,7 +28,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { imageBase64, mode = "general", locationInfo, registeredFaces } = body;
+    const { imageBase64, mode = "general", locationInfo, registeredFaces, userQuestion } = body;
 
     if (!imageBase64) {
       return NextResponse.json({ error: "الصورة مطلوبة للتحليل." }, { status: 400 });
@@ -40,9 +40,9 @@ export async function POST(request: NextRequest) {
       if (snap.exists()) keysConfig = snap.data() as AIKeysConfig;
     } catch {}
 
-    const prompt = buildSystemPrompt(mode, locationInfo, registeredFaces);
+    const prompt = buildSystemPrompt(mode, locationInfo, registeredFaces, userQuestion);
     const result = await processVisionWithFallback(
-      { imageBase64, mode, locationInfo, customPrompt: prompt },
+      { imageBase64, mode, locationInfo, customPrompt: prompt, userQuestion },
       keysConfig
     );
 
