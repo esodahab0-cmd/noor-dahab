@@ -44,63 +44,63 @@ export default function AdminDashboardPage() {
   const activeSessions = users.filter((u) => u.activeSessionToken);
 
   return (
-    <div className="space-y-8 max-w-6xl">
+    <div className="space-y-6 sm:space-y-8 max-w-6xl w-full min-w-0">
       <div>
-        <h1 className="text-3xl font-black text-white">نظام إدارة نور دهب</h1>
-        <p className="text-gray-400 text-sm mt-1">
+        <h1 className="text-2xl sm:text-3xl font-black text-white">نظام إدارة نور دهب</h1>
+        <p className="text-gray-400 text-xs sm:text-sm mt-1">
           مراقبة حالة النظام والمستخدمين المتصلين في الوقت الفعلي ومفاتيح الذكاء الاصطناعي.
         </p>
       </div>
 
       {/* Realtime KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         {/* Live Online Users */}
-        <div className="p-6 bg-dark-800 border-2 border-emerald-500/40 rounded-3xl space-y-2 relative overflow-hidden">
+        <div className="p-4 sm:p-6 bg-dark-800 border-2 border-emerald-500/40 rounded-2xl sm:rounded-3xl space-y-2 relative overflow-hidden">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-emerald-400 uppercase tracking-wider">متصل الآن (مباشر)</span>
-            <span className="w-3 h-3 rounded-full bg-emerald-400 animate-ping" />
+            <span className="text-[10px] sm:text-xs font-bold text-emerald-400 uppercase tracking-wider">متصل الآن</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-4xl font-black text-white">{loading ? "..." : onlineUsers.length}</span>
-            <Radio className="w-8 h-8 text-emerald-400 opacity-60" />
+            <span className="text-2xl sm:text-4xl font-black text-white">{loading ? "..." : onlineUsers.length}</span>
+            <Radio className="w-6 h-6 sm:w-8 sm:h-8 text-emerald-400 opacity-60" />
           </div>
-          <p className="text-xs text-gray-400">مستخدم متصل بالخدمة حالياً</p>
+          <p className="text-[10px] sm:text-xs text-gray-400">مستخدم متصل حالياً</p>
         </div>
 
         {/* Total Users */}
-        <div className="p-6 bg-dark-800 border border-gray-800 rounded-3xl space-y-2">
+        <div className="p-4 sm:p-6 bg-dark-800 border border-gray-800 rounded-2xl sm:rounded-3xl space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">إجمالي الحسابات</span>
-            <Users className="w-5 h-5 text-gold-400" />
+            <span className="text-[10px] sm:text-xs font-bold text-gray-400 uppercase tracking-wider">إجمالي الحسابات</span>
+            <Users className="w-4 h-4 sm:w-5 sm:h-5 text-gold-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-4xl font-black text-white">{loading ? "..." : users.length}</span>
+            <span className="text-2xl sm:text-4xl font-black text-white">{loading ? "..." : users.length}</span>
           </div>
-          <p className="text-xs text-gray-400">حسابات كفوف مسجلة</p>
+          <p className="text-[10px] sm:text-xs text-gray-400">حسابات كفوف مسجلة</p>
         </div>
 
         {/* Gemini Keys Pool */}
-        <div className="p-6 bg-dark-800 border border-gray-800 rounded-3xl space-y-2">
+        <div className="p-4 sm:p-6 bg-dark-800 border border-gray-800 rounded-2xl sm:rounded-3xl space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-gold-400 uppercase tracking-wider">حوض مفاتيح Gemini</span>
-            <Cpu className="w-5 h-5 text-gold-400" />
+            <span className="text-[10px] sm:text-xs font-bold text-gold-400 uppercase tracking-wider">حوض Gemini</span>
+            <Cpu className="w-4 h-4 sm:w-5 sm:h-5 text-gold-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-4xl font-black text-white">{DEFAULT_GEMINI_KEYS.length}</span>
+            <span className="text-2xl sm:text-4xl font-black text-white">{DEFAULT_GEMINI_KEYS.length}</span>
           </div>
-          <p className="text-xs text-gray-400">مفتاح تدوير تلقائي نشط</p>
+          <p className="text-[10px] sm:text-xs text-gray-400">مفتاح تدوير تلقائي</p>
         </div>
 
         {/* Cloudflare Keys Pool */}
-        <div className="p-6 bg-dark-800 border border-gray-800 rounded-3xl space-y-2">
+        <div className="p-4 sm:p-6 bg-dark-800 border border-gray-800 rounded-2xl sm:rounded-3xl space-y-2">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-orange-400 uppercase tracking-wider">حوض Cloudflare</span>
-            <Key className="w-5 h-5 text-orange-400" />
+            <span className="text-[10px] sm:text-xs font-bold text-orange-400 uppercase tracking-wider">حوض Cloudflare</span>
+            <Key className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-4xl font-black text-white">{CLOUDFLARE_TOKENS.length}</span>
+            <span className="text-2xl sm:text-4xl font-black text-white">{CLOUDFLARE_TOKENS.length}</span>
           </div>
-          <p className="text-xs text-gray-400">مفتاح احتياطي 200 OK</p>
+          <p className="text-[10px] sm:text-xs text-gray-400">مفتاح احتياطي 200 OK</p>
         </div>
       </div>
 

@@ -66,11 +66,11 @@ export default function AIKeysAdminPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-4xl">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="space-y-6 sm:space-y-8 max-w-4xl w-full min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-3xl font-black text-white">إدارة وفحص مفاتيح الـ AI</h1>
-          <p className="text-gray-400 text-sm mt-1">
+          <h1 className="text-2xl sm:text-3xl font-black text-white">إدارة وفحص مفاتيح الـ AI</h1>
+          <p className="text-gray-400 text-xs sm:text-sm mt-1">
             مربوط به 13 مفتاح Google Gemini + مفتاحان Cloudflare مع نظام تدوير آلي Fallback.
           </p>
         </div>
@@ -78,15 +78,15 @@ export default function AIKeysAdminPage() {
         <button
           onClick={handleValidateAll}
           disabled={testing}
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-2xl shadow-lg transition-all"
+          className="inline-flex items-center justify-center gap-2 px-5 py-3 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-bold rounded-xl sm:rounded-2xl shadow-lg transition-all text-sm w-full sm:w-auto"
         >
-          {testing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Play className="w-5 h-5" />}
+          {testing ? <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
           {testing ? "جارٍ الفحص الحي..." : "فحص واختبار المفاتيح بنقرة زر"}
         </button>
       </div>
 
       {/* Cloudflare Pool Banner */}
-      <div className="p-6 bg-dark-800 border-2 border-orange-500/40 rounded-3xl space-y-3">
+      <div className="p-4 sm:p-6 bg-dark-800 border-2 border-orange-500/40 rounded-2xl sm:rounded-3xl space-y-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2.5 bg-orange-500/20 text-orange-400 rounded-xl">

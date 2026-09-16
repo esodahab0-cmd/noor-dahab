@@ -89,15 +89,15 @@ export default function UsersAdminPage() {
   };
 
   return (
-    <div className="space-y-8 max-w-5xl">
+    <div className="space-y-6 sm:space-y-8 max-w-5xl w-full min-w-0">
       <div>
-        <h1 className="text-3xl font-black text-white">إدارة المستخدمين والجلسة الواحدة</h1>
-        <p className="text-gray-400 text-sm mt-1">إنشاء حسابات مع بيانات ولي الأمر ورقم الطوارئ ومراقبة الجلسات.</p>
+        <h1 className="text-2xl sm:text-3xl font-black text-white">إدارة المستخدمين والجلسة الواحدة</h1>
+        <p className="text-gray-400 text-xs sm:text-sm mt-1">إنشاء حسابات مع بيانات ولي الأمر ورقم الطوارئ ومراقبة الجلسات.</p>
       </div>
 
       {/* Form */}
-      <form onSubmit={handleCreateUser} className="p-6 bg-dark-800 border border-gray-800 rounded-3xl space-y-4">
-        <h3 className="text-lg font-bold text-gold-400 flex items-center gap-2">
+      <form onSubmit={handleCreateUser} className="p-4 sm:p-6 bg-dark-800 border border-gray-800 rounded-2xl sm:rounded-3xl space-y-4">
+        <h3 className="text-base sm:text-lg font-bold text-gold-400 flex items-center gap-2">
           <UserPlus className="w-5 h-5" />
           إنشاء حساب مستخدم جديد
         </h3>
