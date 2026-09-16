@@ -5,12 +5,14 @@ import { useRouter } from "next/navigation";
 import {
   Volume2, VolumeX, Mic, Navigation, RefreshCw, LogOut,
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
-  Camera, MapPin, ShieldCheck, UserPlus, Save, Zap, Flashlight
+  Camera, ShieldCheck, UserPlus, Save, Zap, Flashlight,
+  Shirt, Search, Monitor, Bus, QrCode, RotateCcw
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
 import { useSingleSession } from "@/lib/hooks/useSingleSession";
 import { compressImage } from "@/lib/utils/image";
+import { AnalysisMode } from "@/lib/ai/types";
 import { PWAInstallPrompt } from "@/components/blind/PWAInstallPrompt";
 import { EmergencySOSModal } from "@/components/blind/EmergencySOSModal";
 import { saveFaceLocally, getAllSavedFaces, SavedFace } from "@/lib/utils/faces-db";
@@ -24,6 +26,7 @@ export default function BlindHomePage() {
   const autoScanTimerRef = useRef<any>(null);
   const longPressTimerRef = useRef<any>(null);
   const isLongPressRef = useRef(false);
+  const lastDescriptionRef = useRef<string>("أهلاً بك في نور دهب. المس الشاشة في أي مكان لبدء الوصف.");
 
   const {
     speak,
@@ -50,6 +53,7 @@ export default function BlindHomePage() {
   const [permState, setPermState] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
+  const [activeMode, setActiveMode] = useState<AnalysisMode>("general");
 
   // Save Face Modal / Voice State
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -93,6 +97,18 @@ export default function BlindHomePage() {
       speak("تم تشغيل مكبر الصوت. نور دهب يتحدث معك الآن بكل وضوح.");
     }, 150);
   };
+
+  // ── Repeat Last Description ─────────────────────────────────
+  const handleRepeatLast = useCallback(() => {
+    unlockSpeaker();
+    triggerHaptic("medium");
+    playChime(523.25, 0.1);
+    if (lastDescriptionRef.current) {
+      speak(lastDescriptionRef.current);
+    } else {
+      speak("لا يوجد وصف سابق بعد. المس الشاشة لوصف ما أمامك.");
+    }
+  }, [speak, triggerHaptic, playChime, unlockSpeaker]);
 
   // ── Robust Camera Initialization ─────────────────────────────
   const requestPermissions = async () => {
@@ -186,6 +202,28 @@ export default function BlindHomePage() {
     }
   };
 
+  // ── Hardware Keys Listener (Volume Buttons / Headsets) ───────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (
+        e.code === "AudioVolumeUp" ||
+        e.code === "AudioVolumeDown" ||
+        e.code === "MediaPlayPause" ||
+        e.key === "VolumeUp" ||
+        e.key === "VolumeDown"
+      ) {
+        if (permState === "granted" && !analyzing) {
+          e.preventDefault();
+          triggerHaptic("medium");
+          handleAnalyze(activeMode);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [permState, analyzing, activeMode]);
+
   // ── Init ────────────────────────────────────────────────────
   useEffect(() => {
     const raw = localStorage.getItem("noor_user");
@@ -240,9 +278,9 @@ export default function BlindHomePage() {
     }
   };
 
-  // ── Analyze Vision with Auto-Torch & Audio Cues ─────────────
+  // ── Analyze Vision (All 11 Modes) ────────────────────────────
   const handleAnalyze = async (
-    mode: "general" | "read_text" | "currency" | "location" | "medication" | "faces" | "obstacle" = "general",
+    mode: AnalysisMode = "general",
     silentPrompt = false
   ) => {
     if (analyzing) return;
@@ -251,22 +289,28 @@ export default function BlindHomePage() {
       return;
     }
 
+    setActiveMode(mode);
     triggerHaptic("light");
-    playChime(660, 0.1); // Capture Audio Cue
+    playChime(660, 0.1);
     setAnalyzing(true);
     stopSpeaking();
 
     if (!silentPrompt) {
-      const labels: Record<string, string> = {
+      const labels: Record<AnalysisMode, string> = {
         general: "أرى الآن...",
         read_text: "أقرأ النصوص...",
-        currency: "أفحص العملة...",
-        medication: "أفحص الدواء...",
+        currency: "أعد النقود وأحسب المبلغ...",
+        medication: "أفحص الدواء والروشتة...",
         faces: "أتعرف على الشخص...",
-        obstacle: "أرصد الطريق...",
-        location: "أحدد المكان...",
+        obstacle: "أرصد الطريق والعوائق...",
+        location: "أحدد المكان والممرات...",
+        colors: "أفحص ألوان وتناسق الملابس...",
+        find_object: "أبحث عن الشيء المفقود...",
+        appliance: "أقرأ شاشة الجهاز والأرقام...",
+        transit: "أرصد لافتة المواصلات والأتوبيس...",
+        barcode: "أقرأ باركود وبيانات المنتج...",
       };
-      speak(labels[mode]);
+      speak(labels[mode] || "أفحص الصورة...");
     }
 
     try {
@@ -300,18 +344,18 @@ export default function BlindHomePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.text || data.error || "تعذر التحليل");
 
-      // Check if response contains a safety hazard / obstacle alert
+      // Warning check for safety obstacles
       const isObstacleOrRisk = /خطر|عائق|انتبه|حفرة|سلم|عقبة|باب مغلق|سيارة|احذر/.test(data.text);
       if (isObstacleOrRisk) {
         triggerHaptic("error");
-        // Distinct double warning beep
         playChime(880, 0.15);
         setTimeout(() => playChime(440, 0.25), 180);
       } else {
         triggerHaptic("success");
-        playChime(523.25, 0.1); // Success chime
+        playChime(523.25, 0.1);
       }
 
+      lastDescriptionRef.current = data.text;
       setCurrentResult(data.text);
       speak(data.text);
     } catch (err: any) {
@@ -329,15 +373,15 @@ export default function BlindHomePage() {
     if (autoScanEnabled && cameraReady) {
       speak("تم تفعيل الوصف التلقائي المستمر.");
       autoScanTimerRef.current = setInterval(() => {
-        handleAnalyze("general", true);
+        handleAnalyze(activeMode, true);
       }, 6500);
     } else {
       clearInterval(autoScanTimerRef.current);
     }
     return () => clearInterval(autoScanTimerRef.current);
-  }, [autoScanEnabled, cameraReady]);
+  }, [autoScanEnabled, cameraReady, activeMode]);
 
-  // ── Full-Screen Long Press & Tap Gesture Handlers ───────────
+  // ── Full-Screen Long Press & Tap Handlers ───────────────────
   const handlePointerDown = () => {
     isLongPressRef.current = false;
     clearTimeout(longPressTimerRef.current);
@@ -346,7 +390,7 @@ export default function BlindHomePage() {
         isLongPressRef.current = true;
         triggerHaptic("medium");
         handleVoiceCommand();
-      }, 550); // 550ms hold = Voice Command Mode
+      }, 550);
     }
   };
 
@@ -372,11 +416,11 @@ export default function BlindHomePage() {
     }
     tapTimerRef.current = setTimeout(() => {
       tapCountRef.current = 0;
-      handleAnalyze("general");
+      handleAnalyze(activeMode);
     }, 300);
   };
 
-  // ── Voice Command Handler ───────────────────────────────────
+  // ── Comprehensive Voice Assistant Command Processor ─────────
   const handleVoiceCommand = () => {
     unlockSpeaker();
     if (permState !== "granted") {
@@ -389,41 +433,76 @@ export default function BlindHomePage() {
       triggerHaptic("medium");
       const lower = transcript.toLowerCase();
 
-      if (/مين صاحب|صاحب الموقع|صاحب الفكرة|مين صنعك|مين طورك|مين برمجك|مين عملك|إسلام|اسلام|دهب سوفتوير|المطور/.test(lower)) {
+      // 1. Repeat last description
+      if (/أعد|كرر|قول تاني|سمعني تاني|قل مرة أخرى|تاني|إعادة/.test(lower)) {
+        handleRepeatLast();
+      }
+      // 2. Creator credits
+      else if (/مين صاحب|صاحب الموقع|صاحب الفكرة|مين صنعك|مين طورك|مين برمجك|مين عملك|إسلام|اسلام|دهب سوفتوير|المطور/.test(lower)) {
         const creatorMsg = "مبتكر ومطور تطبيق نور دهب وصاحب الفكرة هو المهندس إسلام أبو دهب، والتطبيق تابع لشركة دهب سوفتوير. يمكنك زيارة موقع الشركة عبر الرابط أسفل الشاشة.";
         setCurrentResult("المطور: المهندس إسلام أبو دهب • Dahab Software");
         speak(creatorMsg);
       }
+      // 3. Torch controls
       else if (/كشاف|فلاش|نور|شغل الكشاف|شغل الفلاش/.test(lower) && !/اطفي|إطفاء|اقفل/.test(lower)) {
         setTorch(true);
       }
       else if (/اطفي الكشاف|اقفل الكشاف|اطفي الفلاش|إطفاء النور/.test(lower)) {
         setTorch(false);
       }
-      else if (/احفظ|سجل|تذكر|صورة شخص/.test(lower)) {
+      // 4. Colors & Fashion
+      else if (/لون|ألوان|ملابس|قميص|بنطلون|فستان|طقم|بدلة|متناسق|لابس ايه/.test(lower)) {
+        handleAnalyze("colors");
+      }
+      // 5. Find Object
+      else if (/دور|ابحث|فين|أين|مفاتيح|محفظة|نظارة|عصا|ريموت/.test(lower)) {
+        handleAnalyze("find_object");
+      }
+      // 6. Appliance & Screens
+      else if (/شاشة|ميكروويف|غسالة|تكييف|سكر|ضغط|حرارة|درجة/.test(lower)) {
+        handleAnalyze("appliance");
+      }
+      // 7. Transit & Buses
+      else if (/أتوبيس|اتوبيس|ميكروباص|مواصلات|عربية|خط|محطة|رايح فين/.test(lower)) {
+        handleAnalyze("transit");
+      }
+      // 8. Barcode & Products
+      else if (/باركود|كود|منتج|علبة|سعر|صلاحية/.test(lower)) {
+        handleAnalyze("barcode");
+      }
+      // 9. Save Face
+      else if (/احفظ|سجل شخص|تذكر|صورة شخص/.test(lower)) {
         triggerSaveFace();
       }
-      else if (/نص|اقرأ|كلمة|ورقة|كتابة|لافتة/.test(lower)) {
+      // 10. Text & Signs
+      else if (/نص|اقرأ|كلمة|ورقة|كتابة|لافتة|يافطة/.test(lower)) {
         handleAnalyze("read_text");
       }
-      else if (/فلوس|عملة|جنيه|ريال|دولار|نقود/.test(lower)) {
+      // 11. Currency Counting
+      else if (/فلوس|عملة|جنيه|ريال|دولار|نقود|عد|احسب|باقي|فكة/.test(lower)) {
         handleAnalyze("currency");
       }
-      else if (/دواء|علاج|صلاحية|روشتة|علبة|تاريخ/.test(lower)) {
+      // 12. Medication & Scripts
+      else if (/دواء|علاج|روشتة|علبة دواء|تاريخ/.test(lower)) {
         handleAnalyze("medication");
       }
+      // 13. Faces identification
       else if (/مين|شخص|صاحبي|وجه|أمامي|من هذا/.test(lower)) {
         handleAnalyze("faces");
       }
-      else if (/عائق|طريق|قدامي|مسافة|سلم|حفرة/.test(lower)) {
+      // 14. Obstacles
+      else if (/عائق|طريق|قدامي|مسافة|سلم|حفرة|رصيف/.test(lower)) {
         handleAnalyze("obstacle");
       }
-      else if (/موقع|أين|مكاني|شارع|عنوان/.test(lower)) {
+      // 15. Location
+      else if (/موقع|أين أنا|مكاني|شارع|عنوان/.test(lower)) {
         handleAnalyze("location");
       }
+      // 16. Emergency SOS
       else if (/طوارئ|استغاثة|الحقني|مساعدة/.test(lower)) {
         setIsSOSOpen(true);
       }
+      // 17. Stop speaking
       else if (/اسكت|وقف|صمت|كفاية/.test(lower)) {
         stopSpeaking();
       }
@@ -466,7 +545,19 @@ export default function BlindHomePage() {
         </div>
 
         <div className="flex items-center gap-1.5">
-          {/* Torch Toggle Button */}
+          {/* Repeat Button */}
+          {permState === "granted" && (
+            <button
+              onClick={handleRepeatLast}
+              className="p-1.5 bg-dark-800 text-gold-300 border border-gold-500/40 rounded-xl active:scale-95"
+              title="إعادة آخر وصف"
+              aria-label="إعادة الوصف"
+            >
+              <RotateCcw className="w-4 h-4" />
+            </button>
+          )}
+
+          {/* Torch Button */}
           {permState === "granted" && (
             <button
               onClick={() => setTorch(!torchOn)}
@@ -475,7 +566,7 @@ export default function BlindHomePage() {
                   ? "bg-amber-400 text-dark-900 border-amber-300 shadow-lg shadow-amber-400/50"
                   : "bg-dark-800 text-gray-300 border-gray-700"
               }`}
-              title="تشغيل/إطفاء الكشاف"
+              title="الكشاف"
               aria-label="الكشاف"
             >
               <Flashlight className="w-4 h-4" />
@@ -528,7 +619,7 @@ export default function BlindHomePage() {
               </div>
               <div className="text-center">
                 <h2 className="text-xl font-black text-white mb-1">اضغط لبدء نور دهب</h2>
-                <p className="text-xs text-gray-300">لتشغيل الكاميرا ومكبر الصوت والتحدث فوراً.</p>
+                <p className="text-xs text-gray-300">تشغيل الكاميرا ومكبر الصوت والتحدث فوراً.</p>
               </div>
               <button
                 type="button"
@@ -572,7 +663,7 @@ export default function BlindHomePage() {
           onPointerUp={handlePointerUp}
           onPointerLeave={handlePointerUp}
           onClick={handleCenterTap}
-          aria-label="المس الشاشة لوصف فوري أو اضغط مطولاً للتحدث أو 4 نقرات للطوارئ"
+          aria-label="نقرة للوصف • ضغط مطول للتحدث • أزرار الصوت للتصوير • 4 نقرات للطوارئ"
           className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform"
         >
           <div className={`w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-3 ${
@@ -591,14 +682,14 @@ export default function BlindHomePage() {
           </p>
 
           <span className="mt-2 text-[11px] font-bold text-gold-300/90 bg-black/70 px-3 py-1 rounded-full border border-white/10">
-            نقرة واحدة للوصف • ضغط مطول للتحدث • 4 نقرات للطوارئ
+            نقرة للوصف • ضغط مطول للتحدث • أزرار الصوت للتصوير
           </span>
         </div>
       )}
 
-      {/* Bottom Action Buttons */}
+      {/* Bottom Action Grid & Shortcuts */}
       {permState === "granted" && (
-        <footer className="relative z-20 px-3 pb-4 pt-1 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-2">
+        <footer className="relative z-20 px-3 pb-3 pt-1 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-1.5">
           {locationName && (
             <div className="flex items-center gap-2 text-[11px] text-gray-300 bg-black/80 border border-gray-800 px-3 py-1 rounded-xl">
               <Navigation className="w-3 h-3 text-gold-400 shrink-0" />
@@ -606,42 +697,70 @@ export default function BlindHomePage() {
             </div>
           )}
 
-          <div className="grid grid-cols-4 gap-1.5">
+          {/* Quick Analysis Shortcut Pills */}
+          <div className="grid grid-cols-6 gap-1">
             {[
-              { mode: "read_text" as const, icon: <FileText className="w-4 h-4 text-gold-400" />, label: "اقرأ نص", border: "border-gold-500/40" },
-              { mode: "currency" as const, icon: <Banknote className="w-4 h-4 text-emerald-400" />, label: "فلوس", border: "border-emerald-500/40" },
-              { mode: "medication" as const, icon: <Pill className="w-4 h-4 text-purple-400" />, label: "دواء", border: "border-purple-500/40" },
-              { mode: "faces" as const, icon: <Users className="w-4 h-4 text-blue-400" />, label: "مين قدامي؟", border: "border-blue-500/40" },
+              { mode: "read_text" as const, icon: <FileText className="w-3.5 h-3.5 text-gold-400" />, label: "اقرأ" },
+              { mode: "currency" as const, icon: <Banknote className="w-3.5 h-3.5 text-emerald-400" />, label: "فلوس" },
+              { mode: "colors" as const, icon: <Shirt className="w-3.5 h-3.5 text-pink-400" />, label: "ملابس" },
+              { mode: "find_object" as const, icon: <Search className="w-3.5 h-3.5 text-cyan-400" />, label: "مفقود" },
+              { mode: "appliance" as const, icon: <Monitor className="w-3.5 h-3.5 text-yellow-400" />, label: "شاشات" },
+              { mode: "transit" as const, icon: <Bus className="w-3.5 h-3.5 text-purple-400" />, label: "مواصلات" },
             ].map(btn => (
-              <button key={btn.mode} onClick={() => handleAnalyze(btn.mode)} disabled={analyzing}
-                className={`flex flex-col items-center justify-center p-2 bg-dark-800 border ${btn.border} rounded-2xl active:scale-95 text-white font-bold`}>
+              <button
+                key={btn.mode}
+                onClick={() => handleAnalyze(btn.mode)}
+                disabled={analyzing}
+                className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all active:scale-95 ${
+                  activeMode === btn.mode
+                    ? "bg-gold-500/20 border-gold-500 text-white font-bold"
+                    : "bg-dark-800/80 border-gray-800 text-gray-300"
+                }`}
+              >
                 {btn.icon}
-                <span className="text-[10px] mt-1">{btn.label}</span>
+                <span className="text-[9px] mt-0.5">{btn.label}</span>
               </button>
             ))}
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
-            <button onClick={triggerSaveFace} disabled={analyzing}
-              className="flex items-center justify-center gap-1 p-2.5 bg-blue-900/40 border border-blue-500/50 rounded-2xl active:scale-95 text-blue-300 font-bold text-xs">
-              <UserPlus className="w-4 h-4 text-blue-400" />
+          <div className="grid grid-cols-4 gap-1.5">
+            <button
+              onClick={() => handleAnalyze("barcode")}
+              disabled={analyzing}
+              className="flex items-center justify-center gap-1 p-2 bg-dark-800 border border-gray-700 rounded-xl active:scale-95 text-gray-300 font-bold text-xs"
+            >
+              <QrCode className="w-3.5 h-3.5 text-teal-400" />
+              باركود
+            </button>
+
+            <button
+              onClick={triggerSaveFace}
+              disabled={analyzing}
+              className="flex items-center justify-center gap-1 p-2 bg-blue-900/40 border border-blue-500/50 rounded-xl active:scale-95 text-blue-300 font-bold text-xs"
+            >
+              <UserPlus className="w-3.5 h-3.5 text-blue-400" />
               احفظ شخص
             </button>
 
             {/* Voice Input Button */}
-            <button onClick={handleVoiceCommand} disabled={analyzing || isListening}
-              className={`flex items-center justify-center gap-1 p-2.5 border rounded-2xl font-black text-xs transition-all ${
+            <button
+              onClick={handleVoiceCommand}
+              disabled={analyzing || isListening}
+              className={`flex items-center justify-center gap-1 p-2 border rounded-xl font-black text-xs transition-all ${
                 isListening
                   ? "bg-red-500 border-red-400 text-white animate-pulse shadow-lg scale-105"
                   : "bg-gold-500/25 border-gold-500 text-gold-300 active:scale-95"
-              }`}>
-              <Mic className="w-4 h-4" />
-              {isListening ? "أسمعك..." : "أمر صوتي 🎙️"}
+              }`}
+            >
+              <Mic className="w-3.5 h-3.5" />
+              {isListening ? "أسمعك..." : "تحدث 🎙️"}
             </button>
 
-            <button onClick={stopSpeaking}
-              className="flex items-center justify-center gap-1 p-2.5 bg-dark-800 border border-red-500/40 rounded-2xl active:scale-95 text-white font-bold text-xs">
-              {isSpeaking ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4 text-gray-400" />}
+            <button
+              onClick={stopSpeaking}
+              className="flex items-center justify-center gap-1 p-2 bg-dark-800 border border-red-500/40 rounded-xl active:scale-95 text-white font-bold text-xs"
+            >
+              {isSpeaking ? <VolumeX className="w-3.5 h-3.5 text-red-400" /> : <Volume2 className="w-3.5 h-3.5 text-gray-400" />}
               إسكات
             </button>
           </div>

@@ -1,8 +1,22 @@
 export type AIProvider = "groq" | "gemini" | "cloudflare" | "huggingface";
 
+export type AnalysisMode =
+  | "general"
+  | "read_text"
+  | "currency"
+  | "location"
+  | "medication"
+  | "faces"
+  | "obstacle"
+  | "colors"
+  | "find_object"
+  | "appliance"
+  | "transit"
+  | "barcode";
+
 export interface AIAnalysisRequest {
   imageBase64: string;
-  mode?: "general" | "read_text" | "currency" | "location" | "medication" | "faces" | "obstacle";
+  mode?: AnalysisMode;
   locationInfo?: {
     latitude?: number;
     longitude?: number;

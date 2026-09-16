@@ -1,11 +1,11 @@
-import { AIAnalysisRequest, AIAnalysisResponse, AIKeysConfig } from "./types";
+import { AIAnalysisRequest, AIAnalysisResponse, AIKeysConfig, AnalysisMode } from "./types";
 import { analyzeWithGroq } from "./groq";
 import { analyzeWithGeminiPool } from "./gemini-pool";
 import { analyzeWithCloudflarePool } from "./cloudflare-pool";
 import { analyzeWithHuggingFace } from "./huggingface";
 
 export function buildSystemPrompt(
-  mode: string = "general",
+  mode: AnalysisMode = "general",
   locationInfo?: { addressText?: string },
   registeredFaces?: Array<{ name: string; description: string }>
 ): string {
@@ -36,18 +36,39 @@ ${locationContext}
 ${facesContext}`;
 
   switch (mode) {
+    case "colors":
+      return `${basePrompt}\nالمطلوب الخاص بالملابس: حدد اللون الدقيق للقطعة أو القطع الظاهرة (مثل: أزرق كحلي، رمادي فاتح، أسود، نبيتي)، ونوع النقشة (سادة، مقلم، كاروهات)، وقدم نصيحة فورية لتنسيقها وتوافقها مع القطع الأخرى للمكفوفين.`;
+
+    case "currency":
+      return `${basePrompt}\nالمطلوب المحاسبي: قم بحصر وعدّ جميع الأوراق أو العملات النقدية المصرية الظاهرة في الصورة فئة فئة، واذكر المجموع الإجمالي بالجنيه المصري بوضوح تام لحماية الكفيف من الخطأ في الحساب.`;
+
+    case "find_object":
+      return `${basePrompt}\nالمطلوب للبحث عن المفقودات: افحص الصورة بدقة للبحث عن الأشياء الشخصية المعتادة (مفاتيح، محفظة، نظارة، هاتف، عصا بيضاء، ريموت). إذا رأيت الشيء، حدد مكانه الدقيق بالنسبة ليد المستخدم أو اتجاه الكاميرا بالمسافة التقريبية (بالأشبار أو السنتيمترات) فوراً.`;
+
+    case "appliance":
+      return `${basePrompt}\nالمطلوب لقراءة الشاشات والأجهزة: اقرأ بدقة متناهية الأرقام والرموز الرقمية المعروضة على شاشة الجهاز المنزلي أو الطبي (مثل شاشة الميكروويف، الغسالة، ريموت التكييف، جهاز قياس السكر، أو الضغط)، واذكر الحالة والوقت أو القيمة بدقة تامة.`;
+
+    case "transit":
+      return `${basePrompt}\nالمطلوب للمواصلات والشارع: اقرأ فوراً لافتات مقدمة السيارات أو الأتوبيسات أو الميكروباصات الظاهرة، واذكر رقم الخط ووجهة السير المكتوبة باللغة العربية بوضوح لمساعدة الكفيف في المحطة.`;
+
+    case "barcode":
+      return `${basePrompt}\nالمطلوب التجاري: اقرأ الباركود أو كود الاستجابة السريعة (QR) أو بيانات المنتج التجاري، واذكر اسم المنتج التجاري، حجمه، وتاريخ صلاحيته وسعره إن كان مدوناً.`;
+
     case "read_text":
       return `${basePrompt}\nالمطلوب ذو الأولوية: اقرأ جميع النصوص والكلمات المكتوبة في الصورة بدقة ونطق واضح.`;
-    case "currency":
-      return `${basePrompt}\nالمطلوب ذو الأولوية: حدد فئة العملة المصرية الورقية أو المعدنية وقيمتها النقدية وحالتها بدقة.`;
+
     case "medication":
-      return `${basePrompt}\nالمطلوب ذو الأولوية: اقرأ اسم علبة الدواء بدقة وتاريخ الصلاحية والجرعة المكتوبة وحذر الكفيف إذا كان منتهياً.`;
+      return `${basePrompt}\nالمطلوب الطبي: اقرأ اسم علبة الدواء بدقة وتاريخ الصلاحية والجرعة المكتوبة وحذر الكفيف إذا كان منتهياً، وقم بفك شفرة خط الطبيب إن كانت روشتة.`;
+
     case "faces":
-      return `${basePrompt}\nالمطلوب ذو الأولوية: صف الشخص الواقف أمام الكاميرا، ملامحه، تعبيرات وجهه، وهل يطابق أحد المقربين المسجلين.`;
+      return `${basePrompt}\nالمطلوب: صف الشخص الواقف أمام الكاميرا، ملامحه، تعبيرات وجهه، وهل يطابق أحد المقربين المسجلين.`;
+
     case "obstacle":
-      return `${basePrompt}\nالمطلوب ذو الأولوية: حدد أي عائق أو عقبة أمام الكفيف (سلم، حفرة، عمود، باب) وقدر المسافة بالخطوات.`;
+      return `${basePrompt}\nالمطلوب الأمني: حدد أي عائق أو عقبة أمام الكفيف (سلم، حفرة، عمود، باب) وقدر المسافة بالخطوات.`;
+
     case "location":
-      return `${basePrompt}\nالمطلوب ذو الأولوية: صف معالم المكان والممرات لضمان حركة آمنة.`;
+      return `${basePrompt}\nالمطلوب: صف معالم المكان والممرات لضمان حركة آمنة.`;
+
     default:
       return basePrompt;
   }
