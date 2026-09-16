@@ -1,12 +1,12 @@
 export async function compressImage(
   video: HTMLVideoElement,
-  maxWidth = 640,
-  quality = 0.65
+  maxWidth = 400,
+  quality = 0.55
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
-      let width = video.videoWidth || 640;
-      let height = video.videoHeight || 480;
+      let width = video.videoWidth || 400;
+      let height = video.videoHeight || 300;
 
       if (width > maxWidth) {
         height = Math.round((height * maxWidth) / width);
@@ -20,7 +20,7 @@ export async function compressImage(
       if (!ctx) return reject(new Error("No canvas context"));
 
       ctx.drawImage(video, 0, 0, width, height);
-      // Fast compression, lightweight for mobile networks
+      // Ultra-lightweight JPEG compression (~20-30KB) to save bandwidth and hosting resources
       resolve(canvas.toDataURL("image/jpeg", quality));
     } catch (e) { reject(e); }
   });

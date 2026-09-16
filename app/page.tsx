@@ -188,7 +188,7 @@ export default function BlindHomePage() {
     }
     triggerHaptic("medium");
     try {
-      const base64 = await compressImage(videoRef.current, 512, 0.7);
+      const base64 = await compressImage(videoRef.current, 400, 0.55);
       setCapturedFaceBase64(base64);
       setIsSaveModalOpen(true);
       speak("تم التقاط الصورة. تفضل بنطق اسم هذا الشخص بصوتك الآن.");
@@ -252,7 +252,7 @@ export default function BlindHomePage() {
 
     try {
       if (!videoRef.current) throw new Error("الكاميرا غير جاهزة");
-      const base64 = await compressImage(videoRef.current, 512, 0.65);
+      const base64 = await compressImage(videoRef.current, 400, 0.55);
       const user = JSON.parse(localStorage.getItem("noor_user") || "{}");
       const token = localStorage.getItem("noor_session_token") || "";
       const registeredFaces = savedFaces.map(f => ({ name: f.name, description: f.relation || "شخص مقرب" }));

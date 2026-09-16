@@ -23,27 +23,33 @@ export function buildSystemPrompt(
 
   const creatorContext = "صاحب الفكرة والمبتكر والمطور لتطبيق ونظام نور دهب هو المهندس إسلام أبو دهب (شركة دهب سوفتوير Dahab Software https://dahabsoftware.com). إذا سُئلت عن المطور أو صاحب الفكرة أو الشركة، اذكر المهندس إسلام أبو دهب ودهب سوفتوير فوراً وبكل فخر.";
 
-  const base = `أنت "نور دهب"، المساعد الذكي الصوتي الشخصي للمكفوفين وضعاف البصر باللغة العربية.
-صف ما تراه الكاميرا بأسلوب فوري، موجز، واضح جداً وطبيعي ليتم نطقه صوتياً بدون أي علامات ماركداون أو نجوم أو عناوين.
+  const basePrompt = `أنت مساعد بصري ذكي ومحترف مخصص لخدمة الأشخاص المكفوفين وضعاف البصر في مصر.
+عند تحليل أي صورة، اتبع القواعد التالية في إجابتك:
+1. ابدأ بملخص سريع ومباشر في جملة واحدة عما يوجد أمام الكاميرا.
+2. وضح العلاقات المكانية بدقة (على يمينك، على يسارك، أمامك مباشرة، على الأرض).
+3. إذا كانت الصورة تحتوي على عملات نقدية (مصرفية مصرية)، حدد فئتها بدقة (مثلاً: 50 جنيهاً، 200 جنيه).
+4. إذا كان هناك نص عربي أو إنجليزي (مثل لافتات الشارع، أسماء الأدوية، المنتجات)، اقرأه بوضوح.
+5. حذر المستخدم فوراً إذا كانت هناك خطورة أو عقبات أمام حركة السير (مثل: درجات سلم، حفرة، باب مغلق).
+6. اجعل لغتك عربية بسيطة، واضحة، وسريعة الفهم ومباشرة بدون أي علامات ماركداون أو نجوم.
 ${creatorContext}
 ${locationContext}
 ${facesContext}`;
 
   switch (mode) {
     case "read_text":
-      return `${base}\nالمطلوب: اقرأ جميع النصوص والكلمات المكتوبة في الصورة بدقة ونطق واضح.`;
+      return `${basePrompt}\nالمطلوب ذو الأولوية: اقرأ جميع النصوص والكلمات المكتوبة في الصورة بدقة ونطق واضح.`;
     case "currency":
-      return `${base}\nالمطلوب: حدد فئة العملة الورقية أو المعدنية وقيمتها النقدية وحالتها.`;
+      return `${basePrompt}\nالمطلوب ذو الأولوية: حدد فئة العملة المصرية الورقية أو المعدنية وقيمتها النقدية وحالتها بدقة.`;
     case "medication":
-      return `${base}\nالمطلوب الطبي: اقرأ اسم علبة الدواء بدقة، وتاريخ انتهاء الصلاحية (Expiry date)، والجرعة إن وجدت، وحذر الكفيف إذا كان التاريخ منتهياً أو غير واضح.`;
+      return `${basePrompt}\nالمطلوب ذو الأولوية: اقرأ اسم علبة الدواء بدقة وتاريخ الصلاحية والجرعة المكتوبة وحذر الكفيف إذا كان منتهياً.`;
     case "faces":
-      return `${base}\nالمطلوب: صف الشخص الواقف أمام الكاميرا، تقدير عمره، ملامحه، تعبيرات وجهه، وما يرتديه، وهل يطابق أحد المقربين المسجلين.`;
+      return `${basePrompt}\nالمطلوب ذو الأولوية: صف الشخص الواقف أمام الكاميرا، ملامحه، تعبيرات وجهه، وهل يطابق أحد المقربين المسجلين.`;
     case "obstacle":
-      return `${base}\nالمطلوب الأمني: حدد أقرب عائق أو عقبة أمام الكفيف (مثل درجات سلم، حفرة، عمود، باب زجاجي) وقدر المسافة بالخطوات بدقة للمحافظة على سلامته.`;
+      return `${basePrompt}\nالمطلوب ذو الأولوية: حدد أي عائق أو عقبة أمام الكفيف (سلم، حفرة، عمود، باب) وقدر المسافة بالخطوات.`;
     case "location":
-      return `${base}\nالمطلوب: صف معالم المكان الحالي والممرات والأبواب لحركة آمنة.`;
+      return `${basePrompt}\nالمطلوب ذو الأولوية: صف معالم المكان والممرات لضمان حركة آمنة.`;
     default:
-      return `${base}\nالمطلوب: صف المشهد العام أمام الكاميرا بإيجاز مفيد لحركة الكفيف.`;
+      return basePrompt;
   }
 }
 
@@ -54,7 +60,7 @@ export async function processVisionWithFallback(
   const prompt = req.customPrompt || buildSystemPrompt(req.mode, req.locationInfo);
   const attempted: string[] = [];
 
-  // Tier 1: Google Gemini Multi-Key Rotation Pool (13 Keys)
+  // Tier 1: Google Gemini Multi-Key Rotation Pool
   try {
     attempted.push("Gemini Key Pool (Tier 1)");
     const customKeys = keys.geminiKey ? [keys.geminiKey] : undefined;
@@ -70,7 +76,7 @@ export async function processVisionWithFallback(
     console.warn("Gemini Pool failed, attempting Groq fallback:", err.message);
   }
 
-  // Tier 2: Groq LLaMA 3.2 Vision (Fast)
+  // Tier 2: Groq LLaMA 3.2 Vision
   const groqKey = keys.groqKey || process.env.GROQ_API_KEY;
   if (groqKey) {
     try {
@@ -89,7 +95,7 @@ export async function processVisionWithFallback(
     }
   }
 
-  // Tier 3: Cloudflare Workers AI Pool (2 Tokens)
+  // Tier 3: Cloudflare Workers AI Pool
   const cfAccount = keys.cloudflareAccountId || process.env.CLOUDFLARE_ACCOUNT_ID;
   if (cfAccount) {
     try {

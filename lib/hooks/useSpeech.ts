@@ -107,7 +107,7 @@ export function useSpeech() {
       synth.cancel();
 
       const utt = new SpeechSynthesisUtterance(text);
-      utt.lang = "ar-SA";
+      utt.lang = "ar-EG";
       utt.rate = 1.0;
       utt.pitch = 1.0;
       utt.volume = 1.0;
@@ -140,7 +140,7 @@ export function useSpeech() {
       stopSpeaking();
       playChime(880, 0.15);
       const rec = new SR();
-      rec.lang = "ar-SA";
+      rec.lang = "ar-EG";
       rec.continuous = false;
       rec.interimResults = false;
       rec.maxAlternatives = 1;
