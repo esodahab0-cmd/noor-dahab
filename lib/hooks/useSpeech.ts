@@ -78,17 +78,55 @@ export function useSpeech() {
     setIsSpeaking(false);
   }, []);
 
+  const [speechRate, setSpeechRateState] = useState<number>(1.0);
+
+  useEffect(() => {
+    try {
+      const savedRate = localStorage.getItem("noor_speech_rate");
+      if (savedRate) setSpeechRateState(parseFloat(savedRate));
+    } catch {}
+  }, []);
+
+  const setSpeechRate = useCallback((rate: number) => {
+    setSpeechRateState(rate);
+    try {
+      localStorage.setItem("noor_speech_rate", rate.toString());
+    } catch {}
+  }, []);
+
+  const cycleSpeechRate = useCallback(() => {
+    setSpeechRateState((current) => {
+      let next = 1.0;
+      if (current === 1.0) next = 1.25;
+      else if (current === 1.25) next = 1.5;
+      else if (current === 1.5) next = 2.0;
+      else next = 1.0;
+      try {
+        localStorage.setItem("noor_speech_rate", next.toString());
+      } catch {}
+      return next;
+    });
+  }, []);
+
   // High-Quality Arabic Voice via Audio Stream with WebSpeech Fallback
   const speak = useCallback((text: string, onEnd?: () => void) => {
     if (!text || !text.trim()) return;
     stopSpeaking();
     prepareAudioEngine();
 
+    const cleanText = text.trim();
+
+    // If device is offline, bypass network call immediately and speak via local engine
+    if (typeof navigator !== "undefined" && !navigator.onLine) {
+      fallbackToSynth(cleanText, speechRate, onEnd);
+      return;
+    }
+
     // 1. Try High-Quality Realistic Arabic Audio Stream via /api/ai/tts
     try {
-      const cleanText = text.trim();
       const audioUrl = `/api/ai/tts?text=${encodeURIComponent(cleanText)}`;
       const audio = new Audio(audioUrl);
+      audio.playbackRate = speechRate;
       activeAudioRef.current = audio;
 
       audio.onplay = () => setIsSpeaking(true);
@@ -98,21 +136,21 @@ export function useSpeech() {
         onEnd?.();
       };
       audio.onerror = () => {
-        fallbackToSynth(cleanText, onEnd);
+        fallbackToSynth(cleanText, speechRate, onEnd);
       };
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise.catch(() => {
-          fallbackToSynth(cleanText, onEnd);
+          fallbackToSynth(cleanText, speechRate, onEnd);
         });
       }
     } catch (err) {
-      fallbackToSynth(text, onEnd);
+      fallbackToSynth(cleanText, speechRate, onEnd);
     }
-  }, [stopSpeaking, prepareAudioEngine]);
+  }, [stopSpeaking, prepareAudioEngine, speechRate]);
 
-  const fallbackToSynth = (text: string, onEnd?: () => void) => {
+  const fallbackToSynth = (text: string, rate = 1.0, onEnd?: () => void) => {
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       setIsSpeaking(false);
       return;
@@ -124,7 +162,7 @@ export function useSpeech() {
 
       const utt = new SpeechSynthesisUtterance(text);
       utt.lang = "ar-EG";
-      utt.rate = 1.0;
+      utt.rate = rate;
       utt.pitch = 1.0;
       utt.volume = 1.0;
 
@@ -257,6 +295,9 @@ export function useSpeech() {
     unlockSpeaker,
     prepareAudioEngine,
     isAudioUnlocked,
-    playChime
+    playChime,
+    speechRate,
+    setSpeechRate,
+    cycleSpeechRate
   };
 }

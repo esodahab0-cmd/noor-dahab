@@ -6,11 +6,14 @@ import {
   Volume2, VolumeX, Mic, Navigation, RefreshCw, LogOut,
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
   Camera, ShieldCheck, UserPlus, Save, Zap, Flashlight,
-  Shirt, Search, Monitor, Bus, QrCode, RotateCcw
+  Shirt, Search, Monitor, Bus, QrCode, RotateCcw,
+  Moon, Gauge, WifiOff
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
 import { useSingleSession } from "@/lib/hooks/useSingleSession";
+import { useDeviceSensors } from "@/lib/hooks/useDeviceSensors";
+import { analyzeFrameForHazards } from "@/lib/utils/motion-radar";
 import { compressImage } from "@/lib/utils/image";
 import { AnalysisMode } from "@/lib/ai/types";
 import { PWAInstallPrompt } from "@/components/blind/PWAInstallPrompt";
@@ -37,7 +40,9 @@ export default function BlindHomePage() {
     isListening,
     unlockSpeaker,
     isAudioUnlocked,
-    playChime
+    playChime,
+    speechRate,
+    cycleSpeechRate
   } = useSpeech();
 
   const { triggerHaptic } = useHaptic();
@@ -61,6 +66,54 @@ export default function BlindHomePage() {
   const [capturedFaceBase64, setCapturedFaceBase64] = useState("");
   const [personNameInput, setPersonNameInput] = useState("");
   const [savedFaces, setSavedFaces] = useState<SavedFace[]>([]);
+  const handleVoiceCommandRef = useRef<() => void>(() => {});
+  const lastRadarWarningTimeRef = useRef<number>(0);
+
+  const {
+    isOnline,
+    isWakeLockActive,
+    requestWakeLock,
+    isBlackoutMode,
+    toggleBlackoutMode,
+  } = useDeviceSensors({
+    onShake: () => {
+      if (permState === "granted" && !analyzing && !isListening) {
+        triggerHaptic("medium");
+        handleVoiceCommandRef.current?.();
+      }
+    },
+    onNetworkChange: (online) => {
+      if (!online) {
+        triggerHaptic("error");
+        speak("انقطع الاتصال بالإنترنت. تم التبديل إلى وضع عدم الاتصال، رادار العوائق وقارئ الأكواد متاحان الآن بدون شبكة.");
+      } else {
+        triggerHaptic("success");
+        speak("عاد الاتصال بالإنترنت بنجاح.");
+      }
+    }
+  });
+
+  // ── Local Real-Time Hazard Radar (Zero-latency offline) ─────────
+  useEffect(() => {
+    if (!cameraReady) return;
+
+    const radarTimer = setInterval(() => {
+      if (!videoRef.current || analyzing || isListening) return;
+      const res = analyzeFrameForHazards(videoRef.current);
+      if (res.hazardDetected) {
+        const now = Date.now();
+        if (now - lastRadarWarningTimeRef.current > 3500) {
+          lastRadarWarningTimeRef.current = now;
+          triggerHaptic("error");
+          playChime(920, 0.15);
+          setCurrentResult(res.message);
+          speak(res.message);
+        }
+      }
+    }, 250);
+
+    return () => clearInterval(radarTimer);
+  }, [cameraReady, analyzing, isListening, speak, triggerHaptic, playChime]);
 
   // ── Load Saved Faces ──────────────────────────────────────────
   const loadFaces = useCallback(async () => {
@@ -181,6 +234,7 @@ export default function BlindHomePage() {
     setCameraReady(true);
     setPermState("granted");
     unlockSpeaker();
+    requestWakeLock();
 
     // Pre-request microphone permission so voice commands work instantly without extra prompts
     try {
@@ -346,6 +400,15 @@ export default function BlindHomePage() {
     playChime(660, 0.1);
     setAnalyzing(true);
     stopSpeaking();
+
+    // If offline and not using local barcode scanner, alert user
+    if (typeof navigator !== "undefined" && !navigator.onLine && mode !== "barcode") {
+      setAnalyzing(false);
+      const msg = "أنت في وضع عدم الاتصال حالياً. يمكنك مسح الباركود والاعتماد على رادار العوائق بدون إنترنت.";
+      speak(msg);
+      setCurrentResult("وضع عدم الاتصال: متاح قراءة الباركود ورادار العوائق.");
+      return;
+    }
 
     if (!silentPrompt && !userQuestion) {
       const labels: Record<AnalysisMode, string> = {
@@ -638,6 +701,8 @@ export default function BlindHomePage() {
     });
   };
 
+  handleVoiceCommandRef.current = handleVoiceCommand;
+
   // ─────────────────────────────────────────────────────────────
   return (
     <main className="fixed inset-0 bg-black flex flex-col justify-between overflow-hidden select-none touch-none">
@@ -650,15 +715,39 @@ export default function BlindHomePage() {
         className="absolute inset-0 w-full h-full object-cover opacity-90 filter brightness-105 contrast-110 pointer-events-none"
       />
 
+      {/* OLED Battery Saver Blackout Screen */}
+      {isBlackoutMode && (
+        <div
+          onClick={toggleBlackoutMode}
+          className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center cursor-pointer select-none"
+          role="button"
+          aria-label="وضع الشاشة المظلمة مفعل لتوفير البطارية. انقر في أي مكان للخروج"
+        >
+          <div className="w-14 h-14 rounded-full border border-gray-900 flex items-center justify-center mb-3">
+            <Moon className="w-6 h-6 text-gray-800 animate-pulse" />
+          </div>
+          <p className="text-gray-600 text-xs font-bold">وضع التوفير المظلم يعمل 🔋</p>
+          <p className="text-gray-800 text-[10px] mt-1">الكاميرا والمايك نشطان • المس الشاشة للخروج</p>
+        </div>
+      )}
+
       {/* Top Bar */}
       <header className="relative z-20 px-3 pt-3 pb-2 bg-gradient-to-b from-black/95 via-black/80 to-transparent flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <span className="font-black text-lg text-white tracking-wide">نور دهب</span>
 
+          {/* Offline Badge */}
+          {!isOnline && (
+            <span className="px-2 py-0.5 bg-red-600/90 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 animate-pulse">
+              <WifiOff className="w-3 h-3" />
+              أوفلاين
+            </span>
+          )}
+
           {/* Speaker Button */}
           <button
             onClick={handleUnlockSpeaker}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all border ${
+            className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all border ${
               isAudioUnlocked
                 ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                 : "bg-gold-500 text-dark-900 animate-bounce font-black border-gold-400"
@@ -671,6 +760,38 @@ export default function BlindHomePage() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Voice Speed Toggle */}
+          <button
+            onClick={() => {
+              cycleSpeechRate();
+              const nextRate = speechRate === 1.0 ? "1.25" : speechRate === 1.25 ? "1.5" : speechRate === 1.5 ? "2" : "1";
+              speak(`سرعة الصوت ${nextRate}`);
+            }}
+            className="px-2 py-1 bg-dark-800 text-gold-300 border border-gray-700 rounded-xl text-xs font-bold flex items-center gap-1 active:scale-95"
+            title="سرعة نطق الصوت"
+            aria-label={`سرعة الصوت ${speechRate} ضعف`}
+          >
+            <Gauge className="w-3 h-3 text-gold-400" />
+            {speechRate}x
+          </button>
+
+          {/* OLED Blackout Mode (Battery Saver) */}
+          <button
+            onClick={() => {
+              toggleBlackoutMode();
+              speak(isBlackoutMode ? "تم إلغاء شاشة التوفير." : "تم تفعيل شاشة التوفير المظلمة. اضغط في أي مكان لإلغائها.");
+            }}
+            className={`p-1.5 rounded-xl border transition-all ${
+              isBlackoutMode
+                ? "bg-purple-900/50 text-purple-300 border-purple-500"
+                : "bg-dark-800 text-gray-300 border-gray-700"
+            }`}
+            title="وضع الشاشة المظلمة لتوفير البطارية"
+            aria-label="توفير البطارية"
+          >
+            <Moon className="w-4 h-4" />
+          </button>
+
           {/* Repeat Button */}
           {permState === "granted" && (
             <button
@@ -702,20 +823,20 @@ export default function BlindHomePage() {
           {/* Auto Scan Toggle */}
           <button
             onClick={() => setAutoScanEnabled(!autoScanEnabled)}
-            className={`px-2.5 py-1 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all ${
+            className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all ${
               autoScanEnabled
                 ? "bg-blue-600 text-white border-blue-400 animate-pulse"
                 : "bg-dark-800 text-gray-300 border-gray-700"
             }`}
           >
-            <Zap className="w-3.5 h-3.5 text-gold-400" />
+            <Zap className="w-3 h-3 text-gold-400" />
             {autoScanEnabled ? "مستمر ⚡" : "تلقائي"}
           </button>
 
           {/* SOS */}
           <button onClick={() => setIsSOSOpen(true)}
-            className="px-2.5 py-1 bg-red-600 text-white font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow">
-            <AlertTriangle className="w-3.5 h-3.5" />
+            className="px-2 py-1 bg-red-600 text-white font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow">
+            <AlertTriangle className="w-3 h-3" />
             SOS
           </button>
 
