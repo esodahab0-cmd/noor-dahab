@@ -78,7 +78,8 @@ export async function analyzeWithGeminiPool(
         if (!text) throw new Error("استجابة فارغة من Gemini");
 
         const latencyMs = Date.now() - startTime;
-        currentKeyIndex = keyIdx;
+        // Advance to next key for true round-robin load distribution
+        currentKeyIndex = (keyIdx + 1) % totalKeys;
 
         return {
           text: text.trim(),
@@ -88,7 +89,8 @@ export async function analyzeWithGeminiPool(
         };
       } catch (err: any) {
         lastError = err;
-        // Continue to next key or next model
+        console.warn(`[Gemini Pool] Key #${keyIdx + 1} failed on ${modelName}: ${err.message}. Switching to next key...`);
+        // Continue to next key or next model automatically
       }
     }
   }

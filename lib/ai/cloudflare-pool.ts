@@ -62,7 +62,7 @@ export async function analyzeWithCloudflarePool(
       const data = await response.json();
       const text = data.result?.response || data.result?.description || "تم التحليل عبر Cloudflare.";
       const latencyMs = Date.now() - startTime;
-      currentTokenIndex = idx;
+      currentTokenIndex = (idx + 1) % total;
 
       return { text, latencyMs, tokenUsed: token.slice(0, 10) + "..." + token.slice(-4) };
     } catch (err: any) {
