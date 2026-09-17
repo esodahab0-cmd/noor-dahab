@@ -5,8 +5,6 @@ import { Users, Radio, ShieldCheck, Key, ArrowUpRight, Cpu } from "lucide-react"
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import Link from "next/link";
-import { DEFAULT_GEMINI_KEYS } from "@/lib/ai/gemini-pool";
-import { CLOUDFLARE_TOKENS } from "@/lib/ai/cloudflare-pool";
 
 interface UserDoc {
   id: string;
@@ -22,6 +20,22 @@ interface UserDoc {
 export default function AdminDashboardPage() {
   const [users, setUsers] = useState<UserDoc[]>([]);
   const [loading, setLoading] = useState(true);
+  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2 });
+
+  useEffect(() => {
+    // Fetch key pool stats securely from server (zero client-side keys)
+    fetch("/api/admin/keys/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) {
+          setKeyStats({
+            geminiCount: d.geminiCount ?? 4,
+            cloudflareCount: d.cloudflareCount ?? 2,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     const unsub = onSnapshot(
@@ -86,7 +100,7 @@ export default function AdminDashboardPage() {
             <Cpu className="w-4 h-4 sm:w-5 sm:h-5 text-gold-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl sm:text-4xl font-black text-white">{DEFAULT_GEMINI_KEYS.length}</span>
+            <span className="text-2xl sm:text-4xl font-black text-white">{keyStats.geminiCount}</span>
           </div>
           <p className="text-[10px] sm:text-xs text-gray-400">مفتاح تدوير تلقائي</p>
         </div>
@@ -98,7 +112,7 @@ export default function AdminDashboardPage() {
             <Key className="w-4 h-4 sm:w-5 sm:h-5 text-orange-400" />
           </div>
           <div className="flex items-baseline justify-between">
-            <span className="text-2xl sm:text-4xl font-black text-white">{CLOUDFLARE_TOKENS.length}</span>
+            <span className="text-2xl sm:text-4xl font-black text-white">{keyStats.cloudflareCount}</span>
           </div>
           <p className="text-[10px] sm:text-xs text-gray-400">مفتاح احتياطي 200 OK</p>
         </div>

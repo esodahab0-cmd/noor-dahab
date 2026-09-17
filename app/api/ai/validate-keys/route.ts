@@ -5,12 +5,18 @@ import { analyzeWithCloudflarePool } from "@/lib/ai/cloudflare-pool";
 import { analyzeWithHuggingFace } from "@/lib/ai/huggingface";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import { validateOrigin } from "@/lib/security/cors";
 
 async function getTestImageBase64(): Promise<string> {
   return "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/2wBDAQkJCQwLDBgNDRgyIRwhMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjIyMjL/wAARCAABAAEDASIAAhEBAxEB/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAwDAQACEQMRAD8AJQAB/9k=";
 }
 
 export async function POST(request: NextRequest) {
+  // Origin validation
+  if (!validateOrigin(request)) {
+    return NextResponse.json({ error: "Unauthorized Origin" }, { status: 403 });
+  }
+
   try {
     const body = await request.json();
     const { adminKey } = body;

@@ -3,8 +3,44 @@ import { processVisionWithFallback, buildSystemPrompt } from "@/lib/ai/fallback-
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { AIKeysConfig } from "@/lib/ai/types";
+import { validateOrigin, getCorsHeaders, handleCorsPreflight } from "@/lib/security/cors";
+import { checkRateLimit } from "@/lib/security/rate-limiter";
+
+export async function OPTIONS(request: NextRequest) {
+  return handleCorsPreflight(request);
+}
 
 export async function POST(request: NextRequest) {
+  const corsHeaders = getCorsHeaders(request);
+
+  // 1. Strict Origin Validation (Domain Locking)
+  if (!validateOrigin(request)) {
+    return NextResponse.json(
+      { success: false, error: "طلب غير مصرح به: النطاق غير معتمد." },
+      { status: 403, headers: corsHeaders }
+    );
+  }
+
+  // 2. Sliding-Window Rate Limiting (20 requests / minute / IP)
+  const rateLimit = checkRateLimit(request, 20, 60 * 1000);
+  const rateLimitHeaders = {
+    ...corsHeaders,
+    "X-RateLimit-Limit": String(rateLimit.limit),
+    "X-RateLimit-Remaining": String(rateLimit.remaining),
+    "X-RateLimit-Reset": String(rateLimit.resetSeconds),
+  };
+
+  if (!rateLimit.allowed) {
+    return NextResponse.json(
+      {
+        success: false,
+        text: `عذراً، لقد تجاوزت الحد الأقصى للطلبات المتتالية. يرجى الانتظار ${rateLimit.resetSeconds} ثانية للحفاظ على استقرار الخدمة.`,
+        error: "Rate limit exceeded"
+      },
+      { status: 429, headers: rateLimitHeaders }
+    );
+  }
+
   try {
     const sessionToken = request.headers.get("x-session-token");
     const username = request.headers.get("x-username");
@@ -18,7 +54,7 @@ export async function POST(request: NextRequest) {
           if (u.activeSessionToken && u.activeSessionToken !== sessionToken) {
             return NextResponse.json(
               { error: "تم فتح حسابك من جهاز آخر. تم تسجيل الخروج لسلامتك." },
-              { status: 403 }
+              { status: 403, headers: rateLimitHeaders }
             );
           }
         }
@@ -31,7 +67,10 @@ export async function POST(request: NextRequest) {
     const { imageBase64, mode = "general", locationInfo, registeredFaces, userQuestion } = body;
 
     if (!imageBase64) {
-      return NextResponse.json({ error: "الصورة مطلوبة للتحليل." }, { status: 400 });
+      return NextResponse.json(
+        { error: "الصورة مطلوبة للتحليل." },
+        { status: 400, headers: rateLimitHeaders }
+      );
     }
 
     let keysConfig: AIKeysConfig = {};
@@ -46,11 +85,11 @@ export async function POST(request: NextRequest) {
       keysConfig
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, { headers: rateLimitHeaders });
   } catch (error: any) {
     return NextResponse.json(
       { success: false, text: "حدث خطأ غير متوقع.", error: error.message },
-      { status: 500 }
+      { status: 500, headers: rateLimitHeaders }
     );
   }
 }

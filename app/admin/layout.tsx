@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Users, KeyRound, Activity, ShieldCheck, LogOut, Sparkles,
-  Menu, X, ExternalLink, ChevronLeft
+  Menu, X, ExternalLink, ChevronLeft, Database
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -54,6 +54,13 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       icon: KeyRound,
       color: "text-emerald-400",
       activeBg: "bg-emerald-500/20 border-emerald-500/50 text-emerald-300",
+    },
+    {
+      href: "/admin/backup",
+      label: "النسخ الاحتياطي والاسترجاع",
+      icon: Database,
+      color: "text-amber-400",
+      activeBg: "bg-amber-500/20 border-amber-500/50 text-amber-300",
     },
   ];
 

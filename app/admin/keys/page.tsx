@@ -4,8 +4,6 @@ import { useState, useEffect } from "react";
 import { KeyRound, CheckCircle2, Play, RefreshCw, Shield, Layers, Cloud } from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
-import { DEFAULT_GEMINI_KEYS } from "@/lib/ai/gemini-pool";
-import { CLOUDFLARE_TOKENS } from "@/lib/ai/cloudflare-pool";
 
 export default function AIKeysAdminPage() {
   const [keys, setKeys] = useState({
@@ -20,6 +18,22 @@ export default function AIKeysAdminPage() {
   const [testing, setTesting] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [message, setMessage] = useState("");
+  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2 });
+
+  useEffect(() => {
+    // Fetch key pool counts securely from server (zero client-side keys)
+    fetch("/api/admin/keys/status")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) {
+          setKeyStats({
+            geminiCount: d.geminiCount ?? 4,
+            cloudflareCount: d.cloudflareCount ?? 2,
+          });
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     async function loadKeys() {
@@ -71,7 +85,7 @@ export default function AIKeysAdminPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white">إدارة وفحص مفاتيح الـ AI</h1>
           <p className="text-gray-400 text-xs sm:text-sm mt-1">
-            مربوط به 13 مفتاح Google Gemini + مفتاحان Cloudflare مع نظام تدوير آلي Fallback.
+            مربوط به {keyStats.geminiCount} مفاتيح Google Gemini + {keyStats.cloudflareCount} مفتاح Cloudflare مع نظام تدوير آلي Fallback وحماية خادم 100%.
           </p>
         </div>
 
@@ -93,19 +107,19 @@ export default function AIKeysAdminPage() {
               <Cloud className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">حوض مفاتيح Cloudflare Workers AI (2 Tokens)</h3>
-              <p className="text-xs text-gray-400">مفتاحان مدمجان ومختبران بنجاح (Status 200 Active)</p>
+              <h3 className="text-lg font-bold text-white">حوض مفاتيح Cloudflare Workers AI ({keyStats.cloudflareCount} Tokens)</h3>
+              <p className="text-xs text-gray-400">مفاتيح مؤمنة بالكامل داخل السيرفر ولا يتم تسريبها للمتصفح</p>
             </div>
           </div>
           <span className="px-3 py-1 bg-orange-500/20 text-orange-400 border border-orange-500/30 rounded-full text-xs font-black">
-            2 مفتاح مدمج
+            {keyStats.cloudflareCount} مفتاح مدمج
           </span>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-          {CLOUDFLARE_TOKENS.map((t, idx) => (
+          {Array.from({ length: keyStats.cloudflareCount }).map((_, idx) => (
             <div key={idx} className="p-3 bg-dark-700/60 rounded-xl border border-gray-700 text-xs font-mono text-gray-300 flex items-center justify-between">
-              <span>Cloudflare Token #{idx + 1} ({t.slice(0, 10)}...{t.slice(-4)})</span>
+              <span>Cloudflare Token #{idx + 1} (Server Safe)</span>
               <span className="text-emerald-400 font-bold">✓ نشط (200 OK)</span>
             </div>
           ))}
@@ -120,19 +134,19 @@ export default function AIKeysAdminPage() {
               <Layers className="w-6 h-6" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">حوض مفاتيح Google Gemini (13 Keys)</h3>
-              <p className="text-xs text-gray-400">تدوير تلقائي يضمن عدم توقف الخدمة أبداً</p>
+              <h3 className="text-lg font-bold text-white">حوض مفاتيح Google Gemini ({keyStats.geminiCount} Keys)</h3>
+              <p className="text-xs text-gray-400">تدوير تلقائي يضمن عدم توقف الخدمة أبداً بنموذج gemini-3.5-flash</p>
             </div>
           </div>
           <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-xs font-black">
-            {DEFAULT_GEMINI_KEYS.length} مفتاح جاهز
+            {keyStats.geminiCount} مفتاح جاهز
           </span>
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 pt-2">
-          {DEFAULT_GEMINI_KEYS.map((k, idx) => (
+          {Array.from({ length: keyStats.geminiCount }).map((_, idx) => (
             <div key={idx} className="p-2 bg-dark-700/60 rounded-xl border border-gray-700 text-xs font-mono text-gray-300 flex items-center justify-between">
-              <span>مفتاح #{idx + 1}</span>
+              <span>مفتاح #{idx + 1} (Server-Side)</span>
               <span className="text-emerald-400 font-bold">✓ جاهز</span>
             </div>
           ))}

@@ -1,3 +1,7 @@
+if (typeof window !== "undefined") {
+  throw new Error("SECURITY VIOLATION: Gemini client cannot be loaded on the client side.");
+}
+
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export async function analyzeWithGemini(
@@ -10,7 +14,7 @@ export async function analyzeWithGemini(
   
   const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-3.5-flash",
     generationConfig: {
       temperature: 0.2,
       maxOutputTokens: 600,

@@ -1,3 +1,7 @@
+if (typeof window !== "undefined") {
+  throw new Error("SECURITY VIOLATION: Cloudflare tokens cannot be loaded on the client side.");
+}
+
 const rawTokens = process.env.CLOUDFLARE_TOKENS 
   ? process.env.CLOUDFLARE_TOKENS.split(',')
   : [
@@ -6,6 +10,10 @@ const rawTokens = process.env.CLOUDFLARE_TOKENS
     ];
 
 export const CLOUDFLARE_TOKENS = rawTokens;
+
+export function getCloudflareTokenCount(): number {
+  return rawTokens.length;
+}
 
 let currentTokenIndex = 0;
 
