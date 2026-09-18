@@ -18,11 +18,12 @@ export function getGeminiPoolCount(): number {
 }
 
 // Active & Supported Gemini models with automated failover
+// Priority: gemini-flash-latest & lite are stable workhorses, then gemini-3.6/3.8
 const ACTIVE_MODELS = [
-  "gemini-3.8-flash",
-  "gemini-3.6-flash",
   "gemini-flash-latest",
-  "gemini-flash-lite-latest"
+  "gemini-flash-lite-latest",
+  "gemini-3.6-flash",
+  "gemini-3.8-flash"
 ];
 
 let currentKeyIndex = 0;
@@ -49,9 +50,13 @@ export async function analyzeWithGeminiPool(
       const startTime = Date.now();
 
       try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
         const response = await fetch(url, {
           method: "POST",
+          signal: controller.signal,
           headers: {
             "Content-Type": "application/json"
           },
@@ -74,6 +79,7 @@ export async function analyzeWithGeminiPool(
           throw new Error(`HTTP ${response.status}: ${JSON.stringify(errBody.error || response.statusText)}`);
         }
 
+        clearTimeout(timeoutId);
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
         if (!text) throw new Error("استجابة فارغة من Gemini");
