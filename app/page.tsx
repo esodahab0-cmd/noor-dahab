@@ -7,7 +7,7 @@ import {
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
   Camera, ShieldCheck, UserPlus, Save, Zap, Flashlight,
   Shirt, Search, Monitor, Bus, QrCode, RotateCcw,
-  Moon, Gauge, WifiOff, Compass
+  Moon, Gauge, WifiOff, Compass, Train, Cpu
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
@@ -20,6 +20,8 @@ import { PWAInstallPrompt } from "@/components/blind/PWAInstallPrompt";
 import { EmergencySOSModal } from "@/components/blind/EmergencySOSModal";
 import { saveFaceLocally, getAllSavedFaces, SavedFace } from "@/lib/utils/faces-db";
 import { scanBarcodeLocally } from "@/lib/utils/barcode";
+import { detectObjectsLocally, preWarmLocalModel } from "@/lib/ai/local-object-detector";
+import { findNearestMetroStation, NearestMetroResult } from "@/lib/utils/metro-navigator";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -346,6 +348,7 @@ export default function BlindHomePage() {
     if (!raw) { router.push("/login"); return; }
     const user = JSON.parse(raw);
     setUserProfile(user);
+    preWarmLocalModel();
 
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
@@ -434,6 +437,69 @@ export default function BlindHomePage() {
     );
   }, [speak, triggerHaptic, playChime, compass]);
 
+  // ── Announce Nearest Metro Station (Egyptian Colloquial GPS Metro Assistant) ──
+  const announceNearestMetro = useCallback(() => {
+    triggerHaptic("medium");
+    playChime(660, 0.12);
+
+    const checkCoords = (lat: number, lon: number) => {
+      const metroRes = findNearestMetroStation(lat, lon, compass?.degrees);
+      if (metroRes) {
+        lastDescriptionRef.current = metroRes.spokenText;
+        setCurrentResult(metroRes.spokenText);
+        speak(metroRes.spokenText);
+      } else {
+        const fallbackMsg = "مش قادر أحدد أقرب محطة مترو، اتأكد من تشغيل الـ GPS.";
+        setCurrentResult(fallbackMsg);
+        speak(fallbackMsg);
+      }
+    };
+
+    if (locationCoords?.lat && locationCoords?.lon) {
+      checkCoords(locationCoords.lat, locationCoords.lon);
+    } else if (typeof navigator !== "undefined" && navigator.geolocation) {
+      speak("بحدد أقرب محطة مترو لموقعك دلوقتي بالـ GPS...");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude: lat, longitude: lon } = pos.coords;
+          setLocationCoords({ lat, lon });
+          checkCoords(lat, lon);
+        },
+        (err) => {
+          speak("فعل خدمة الـ GPS وتحديد الموقع عشان أقولك أقرب محطة مترو.");
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    } else {
+      speak("خاصية تحديد الموقع مش مدعومة في جهازك.");
+    }
+  }, [locationCoords, compass, triggerHaptic, playChime, speak]);
+
+  // ── Trigger Local Zero-Internet AI Object Detection ───────────
+  const triggerLocalObjectDetection = useCallback(async () => {
+    if (!videoRef.current || !cameraReady) {
+      speak("الكاميرا مش جاهزة لعمل الفحص المحلي.");
+      return;
+    }
+    triggerHaptic("medium");
+    playChime(550, 0.1);
+
+    try {
+      const res = await detectObjectsLocally(videoRef.current);
+      if (res.hazardDetected) {
+        triggerHaptic("error");
+        playChime(880, 0.2);
+      } else {
+        triggerHaptic("success");
+      }
+      lastDescriptionRef.current = res.spokenText;
+      setCurrentResult(res.spokenText);
+      speak(res.spokenText);
+    } catch (e: any) {
+      speak("تعذر إتمام الفحص المحلي حالياً.");
+    }
+  }, [cameraReady, triggerHaptic, playChime, speak]);
+
   // ── Analyze Vision (All 11 Modes) ────────────────────────────
   const handleAnalyze = async (
     mode: AnalysisMode = "general",
@@ -452,12 +518,11 @@ export default function BlindHomePage() {
     setAnalyzing(true);
     stopSpeaking();
 
-    // If offline and not using local barcode scanner, alert user
+    // If offline and not using local barcode scanner, run On-Device Local AI!
     if (typeof navigator !== "undefined" && !navigator.onLine && mode !== "barcode") {
+      speak("انقطع الإنترنت. جاري الفحص بالذكاء الاصطناعي المحلي فائق السرعة...");
+      await triggerLocalObjectDetection();
       setAnalyzing(false);
-      const msg = "أنت في وضع عدم الاتصال حالياً. يمكنك مسح الباركود والاعتماد على رادار العوائق بدون إنترنت.";
-      speak(msg);
-      setCurrentResult("وضع عدم الاتصال: متاح قراءة الباركود ورادار العوائق.");
       return;
     }
 
@@ -702,6 +767,18 @@ export default function BlindHomePage() {
       }
       if (/اطفي رفيق الطريق|اقفل رفيق الطريق|وقف رفيق الطريق|كفاية رفيق/.test(lower)) {
         if (companionMode) toggleCompanionMode();
+        return;
+      }
+
+      // 4.3 Metro Voice Command (أقرب محطة مترو بالـ GPS)
+      if (/مترو|محطة مترو|أقرب مترو|اقرب مترو|محطة المترو|اركب مترو|فين المترو/.test(lower)) {
+        announceNearestMetro();
+        return;
+      }
+
+      // 4.4 Local On-Device AI Scanner (فحص محلي بدون إنترنت)
+      if (/محلي|أوفلاين|افحص محلي|ذكاء محلي|من غير نت|بدون نت|رادار سريع/.test(lower)) {
+        triggerLocalObjectDetection();
         return;
       }
 
@@ -1059,15 +1136,39 @@ export default function BlindHomePage() {
       {/* Bottom Action Grid & Shortcuts */}
       {permState === "granted" && (
         <footer className="relative z-20 px-3 pb-3 pt-1 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-1.5">
-          <button
-            onClick={announceCurrentLocation}
-            aria-label={locationName ? `موقعك الحالي: ${locationName}. اضغط لسماع اسم الشارع والموقع` : "اضغط لتحديد وسماع اسم الشارع وموقعك الحالي بالـ GPS"}
-            className="flex items-center gap-2 text-[11px] text-gray-300 bg-black/80 border border-gray-800 px-3 py-1.5 rounded-xl active:scale-98 text-right w-full hover:border-gold-500/40 shadow-sm"
-          >
-            <Navigation className="w-3.5 h-3.5 text-gold-400 shrink-0 animate-pulse" />
-            <span className="truncate flex-1 font-medium">{locationDetails?.street ? `${locationDetails.street} • ${locationDetails.area || locationDetails.city || ""}` : (locationName || "تحديد اسم الشارع والموقع (GPS)")}</span>
-            <span className="text-[10px] text-gold-400 font-bold shrink-0 bg-gold-500/10 px-2 py-0.5 rounded-md border border-gold-500/20">اسم الشارع 🔊</span>
-          </button>
+          {/* Offline local detector quick trigger when offline */}
+          {!isOnline && (
+            <button
+              onClick={triggerLocalObjectDetection}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 bg-gradient-to-r from-red-600 via-amber-600 to-yellow-600 text-white font-black text-xs rounded-xl shadow-lg active:scale-95 animate-pulse"
+            >
+              <Cpu className="w-4 h-4" />
+              <span>فحص فوري بالذكاء الاصطناعي المحلي بدون إنترنت ⚡</span>
+            </button>
+          )}
+
+          {/* Street & Nearest Metro Duo Row */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={announceCurrentLocation}
+              aria-label={locationName ? `موقعك الحالي: ${locationName}. اضغط لسماع اسم الشارع والموقع` : "اضغط لتحديد وسماع اسم الشارع وموقعك الحالي بالـ GPS"}
+              className="flex items-center gap-1.5 text-[11px] text-gray-300 bg-black/80 border border-gray-800 px-2.5 py-2 rounded-xl active:scale-98 text-right hover:border-gold-500/40 shadow-sm"
+            >
+              <Navigation className="w-3.5 h-3.5 text-gold-400 shrink-0 animate-pulse" />
+              <span className="truncate flex-1 font-medium">{locationDetails?.street ? `${locationDetails.street}` : (locationName || "اسم الشارع")}</span>
+              <span className="text-[10px] text-gold-400 font-bold shrink-0 bg-gold-500/10 px-1.5 py-0.5 rounded-md border border-gold-500/20">الشارع 🔊</span>
+            </button>
+
+            <button
+              onClick={announceNearestMetro}
+              aria-label="اضغط لمعرفة أقرب محطة مترو بالمسافة والاتجاه"
+              className="flex items-center gap-1.5 text-[11px] text-gray-300 bg-black/80 border border-purple-500/30 px-2.5 py-2 rounded-xl active:scale-98 text-right hover:border-purple-400 shadow-sm"
+            >
+              <Train className="w-3.5 h-3.5 text-purple-400 shrink-0" />
+              <span className="truncate flex-1 font-medium">أقرب محطة مترو</span>
+              <span className="text-[10px] text-purple-300 font-bold shrink-0 bg-purple-500/20 px-1.5 py-0.5 rounded-md border border-purple-500/30">مترو 🚇</span>
+            </button>
+          </div>
 
           {/* Quick Analysis Shortcut Pills */}
           <div className="grid grid-cols-6 gap-1">
