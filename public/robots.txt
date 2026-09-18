@@ -3,4 +3,4 @@ Allow: /
 Disallow: /admin/
 Disallow: /api/
 
-Sitemap: https://noor-dahab.vercel.app/sitemap.xml
+Sitemap: https://dahabsoftware.online/sitemap.xml

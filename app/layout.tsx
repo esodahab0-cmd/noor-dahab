@@ -3,7 +3,7 @@ import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://noor-dahab.vercel.app"),
+  metadataBase: new URL("https://dahabsoftware.online"),
   title: "نور دهب - رفيق المكفوفين الذكي | Dahab Software",
   description: "نظام ومساعد بصري ذكي فائق السرعة مخصص لخدمة الأشخاص المكفوفين وضعاف البصر في مصر والوطن العربي. ابتكار وتطوير المهندس إسلام أبو دهب - شركة دهب سوفتوير.",
   keywords: [
@@ -17,7 +17,9 @@ export const metadata: Metadata = {
     "Noor Dahab",
     "Blind Assistant AI",
     "قارئ نصوص للمكفوفين",
-    "فحص العملات المصرية"
+    "فحص العملات المصرية",
+    "مساعد المترو للمكفوفين",
+    "تطبيق لفاقدي البصر"
   ],
   authors: [
     { name: "المهندس إسلام أبو دهب", url: "https://dahabsoftware.com" }
@@ -29,12 +31,12 @@ export const metadata: Metadata = {
     google: "aVb6lwoYXazxh6uE2Dvidd-mMasOJpfMfEFLghrTTQ8",
   },
   alternates: {
-    canonical: "https://noor-dahab.vercel.app"
+    canonical: "https://dahabsoftware.online"
   },
   openGraph: {
     type: "website",
     locale: "ar_EG",
-    url: "https://noor-dahab.vercel.app",
+    url: "https://dahabsoftware.online",
     siteName: "نور دهب - Noor Dahab",
     title: "نور دهب - رفيق المكفوفين الذكي | Dahab Software",
     description: "أقوى مساعد بصري صوتي ذكي للمكفوفين يدمج الكاميرا وتحليل الذكاء الاصطناعي الفوري ومكبر الصوت مجاناً 100%.",
@@ -88,6 +90,36 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebApplication",
+              "name": "نور دهب - رفيق المكفوفين الذكي",
+              "alternateName": "Noor Dahab",
+              "url": "https://dahabsoftware.online",
+              "description": "أقوى نظام ومساعد بصري ذكي فائق السرعة لخدمة الأشخاص المكفوفين وضعاف البصر في مصر والوطن العربي.",
+              "applicationCategory": "AccessibilityApplication",
+              "operatingSystem": "All (Web, Android, iOS)",
+              "offers": {
+                "@type": "Offer",
+                "price": "0",
+                "priceCurrency": "EGP"
+              },
+              "author": {
+                "@type": "Person",
+                "name": "المهندس إسلام أبو دهب",
+                "url": "https://dahabsoftware.com"
+              },
+              "publisher": {
+                "@type": "Organization",
+                "name": "Dahab Software",
+                "url": "https://dahabsoftware.com"
+              }
+            })
+          }}
+        />
       </head>
       <body className="bg-dark-900 text-white h-full w-full overflow-hidden" style={{ fontFamily: "'Cairo', sans-serif" }} suppressHydrationWarning>
         <ServiceWorkerRegister />
