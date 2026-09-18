@@ -54,6 +54,12 @@ export default function BlindHomePage() {
   const [currentResult, setCurrentResult] = useState("المس الشاشة لوصف ما أمامك، أو اضغط مطولاً للتحدث.");
   const [locationName, setLocationName] = useState("");
   const [locationCoords, setLocationCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [locationDetails, setLocationDetails] = useState<{
+    street?: string;
+    area?: string;
+    city?: string;
+    spokenText?: string;
+  } | null>(null);
   const [isSOSOpen, setIsSOSOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>({});
   const [permState, setPermState] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
@@ -69,27 +75,29 @@ export default function BlindHomePage() {
   const handleVoiceCommandRef = useRef<() => void>(() => {});
   const lastRadarWarningTimeRef = useRef<number>(0);
 
+  // Hardware Sensors Hook
   const {
     isOnline,
     isWakeLockActive,
     requestWakeLock,
+    releaseWakeLock,
     isBlackoutMode,
     toggleBlackoutMode,
-    compass,
+    compass
   } = useDeviceSensors({
     onShake: () => {
-      if (permState === "granted" && !analyzing && !isListening) {
+      if (permState === "granted" && !analyzing) {
         triggerHaptic("medium");
+        playChime(440, 0.2);
+        speak("هز الهاتف: جاري الوصف الفوري...");
         handleVoiceCommandRef.current?.();
       }
     },
     onNetworkChange: (online) => {
-      if (!online) {
-        triggerHaptic("error");
-        speak("انقطع الاتصال بالإنترنت. تم التبديل إلى وضع عدم الاتصال، رادار العوائق وقارئ الأكواد متاحان الآن بدون شبكة.");
+      if (online) {
+        speak("عاد اتصال الإنترنت للعمل بنجاح.");
       } else {
-        triggerHaptic("success");
-        speak("عاد الاتصال بالإنترنت بنجاح.");
+        speak("تنبيه: انقطع اتصال الإنترنت. تم تفعيل المساعد المحلي وقارئ الباركود ورادار العوائق.");
       }
     }
   });
@@ -98,11 +106,13 @@ export default function BlindHomePage() {
   const announceCompassDirection = useCallback(() => {
     triggerHaptic("medium");
     playChime(660, 0.1);
-    const locationPart = locationName ? ` في ${locationName}` : "";
-    const msg = `أنت متجه الآن نحو ${compass.directionAr}، بزاوية ${compass.degrees} درجة${locationPart}.`;
+    const locationPart = locationDetails?.street 
+      ? ` في ${locationDetails.street}` 
+      : (locationName ? ` في ${locationName}` : "");
+    const msg = `أنت دلوقتي باصص ناحية ${compass.directionAr}، بزاوية ${compass.degrees} درجة${locationPart}.`;
     setCurrentResult(msg);
     speak(msg);
-  }, [compass, locationName, triggerHaptic, playChime, speak]);
+  }, [compass, locationName, locationDetails, triggerHaptic, playChime, speak]);
 
   // ── Walking Companion Co-Pilot Mode ──────────────────────────
   const [companionMode, setCompanionMode] = useState(false);
@@ -279,21 +289,32 @@ export default function BlindHomePage() {
     }, 200);
 
     if (navigator.geolocation) {
+      const updateGeo = async (pos: GeolocationPosition) => {
+        const { latitude: lat, longitude: lon } = pos.coords;
+        setLocationCoords({ lat, lon });
+        try {
+          const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
+          const data = await res.json();
+          if (data.success) {
+            setLocationName(data.address);
+            setLocationDetails(data);
+          }
+        } catch {}
+      };
+
       navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const { latitude: lat, longitude: lon } = pos.coords;
-          setLocationCoords({ lat, lon });
-          try {
-            const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
-            const data = await res.json();
-            if (data.success) {
-              setLocationName(data.address);
-            }
-          } catch {}
-        },
+        updateGeo,
         () => {},
         { enableHighAccuracy: true, timeout: 10000 }
       );
+
+      try {
+        navigator.geolocation.watchPosition(
+          updateGeo,
+          () => {},
+          { enableHighAccuracy: true, maximumAge: 15000, timeout: 15000 }
+        );
+      } catch {}
     }
   };
 
@@ -373,14 +394,14 @@ export default function BlindHomePage() {
     }
   };
 
-  // ── Announce Current Location Spoken Directly ────────────────
+  // ── Announce Current Location Spoken Directly (Egyptian Arabic Reverse Geocoding) ──
   const announceCurrentLocation = useCallback(async () => {
     triggerHaptic("medium");
     playChime(660, 0.1);
-    speak("جارٍ تحديد موقعك واسم الشارع بدقة...");
+    speak("بحدد مكانك واسم الشارع بالـ GPS دلوقتي...");
 
     if (typeof navigator === "undefined" || !navigator.geolocation) {
-      speak("خاصية تحديد الموقع غير مدعومة في جهازك.");
+      speak("خاصية تحديد الموقع الجغرافي مش مدعومة في جهازك.");
       return;
     }
 
@@ -391,25 +412,27 @@ export default function BlindHomePage() {
         try {
           const res = await fetch(`/api/geo?lat=${lat}&lon=${lon}`);
           const data = await res.json();
-          if (data.success && data.address) {
+          if (data.success) {
             setLocationName(data.address);
-            const msg = `أنت متواجد حالياً في: ${data.address}`;
-            lastDescriptionRef.current = msg;
-            setCurrentResult(msg);
-            speak(msg);
+            setLocationDetails(data);
+            const headingText = compass?.directionAr ? ` وباصص ناحية ${compass.directionAr}` : "";
+            const spoken = (data.spokenText || `أنت دلوقتي في: ${data.address}`) + headingText + ".";
+            lastDescriptionRef.current = spoken;
+            setCurrentResult(spoken);
+            speak(spoken);
           } else {
-            speak("تم رصد إحداثيات موقعك، لكن تعذر جلب اسم الشارع حالياً.");
+            speak("تم رصد إحداثيات موقعك عبر الـ GPS، لكن جاري تحديث اسم الشارع.");
           }
         } catch {
-          speak("تعذر الاتصال بخدمة الخرائط لتحديد اسم الشارع.");
+          speak("تعذر الاتصال بخدمة الخرائط لتحديد اسم الشارع. اتأكد من اتصال النت.");
         }
       },
       (err) => {
-        speak("يرجى تفعيل خدمة الـ GPS والموقع في هاتفك لسماع اسم الشارع.");
+        speak("فعل خدمة الـ GPS وتحديد الموقع في تليفونك عشان أقولك اسم الشارع والمكان بالظبط.");
       },
       { enableHighAccuracy: true, timeout: 12000 }
     );
-  }, [speak, triggerHaptic, playChime]);
+  }, [speak, triggerHaptic, playChime, compass]);
 
   // ── Analyze Vision (All 11 Modes) ────────────────────────────
   const handleAnalyze = async (
@@ -440,21 +463,21 @@ export default function BlindHomePage() {
 
     if (!silentPrompt && !userQuestion) {
       const labels: Record<AnalysisMode, string> = {
-        general: "أرى الآن...",
-        read_text: "أقرأ لك محتوى الورقة والكتابة بدقة...",
-        currency: "أعد النقود وأحسب المبلغ...",
-        medication: "أفحص الدواء والروشتة...",
-        faces: "أتعرف على الشخص...",
-        obstacle: "أرصد الطريق والعوائق...",
-        location: "أحدد المكان والممرات...",
-        colors: "أفحص ألوان وتناسق الملابس...",
-        find_object: "أبحث عن الشيء المفقود...",
-        appliance: "أقرأ شاشة الجهاز والأرقام...",
-        transit: "أرصد لافتة المواصلات والأتوبيس...",
-        barcode: "أقرأ باركود وبيانات المنتج...",
-        companion: "أرافقك في الطريق...",
+        general: "بشوف قدامك دلوقتي...",
+        read_text: "بقرالك الورقة والمكتوب بالظبط...",
+        currency: "بعد الفلوس وبحسب المبلغ...",
+        medication: "بفحص الدوا والروشتة...",
+        faces: "بتعرف على الشخص اللي قدامك...",
+        obstacle: "برصدلك الطريق والعوائق...",
+        location: "بحددلك معالم المكان والممرات...",
+        colors: "بشوفلك ألوان وتناسق اللبس...",
+        find_object: "بدورلك على الحاجة الضايعة...",
+        appliance: "بقرالك شاشة الجهاز والأرقام...",
+        transit: "بقرالك يافطة العربية أو الأتوبيس...",
+        barcode: "بقرالك بيانات المنتج والباركود...",
+        companion: "ماشي معاك ومرافقك في الطريق...",
       };
-      speak(labels[mode] || "أفحص الصورة...");
+      speak(labels[mode] || "بفحص الصورة...");
     }
 
     try {
@@ -496,8 +519,8 @@ export default function BlindHomePage() {
       const registeredFaces = savedFaces.map(f => ({ name: f.name, description: f.relation || "شخص مقرب" }));
 
       const locationWithCompass = [
-        locationName,
-        compass?.directionAr ? `متجه نحو ${compass.directionAr} (${compass.degrees} درجة)` : ""
+        locationDetails?.spokenText || locationName,
+        compass?.directionAr ? `متجه ناحية ${compass.directionAr} (${compass.degrees} درجة)` : ""
       ].filter(Boolean).join(" • ");
 
       const res = await fetch("/api/ai/analyze", {
@@ -510,7 +533,13 @@ export default function BlindHomePage() {
         body: JSON.stringify({
           imageBase64: base64,
           mode,
-          locationInfo: { addressText: locationWithCompass },
+          locationInfo: {
+            addressText: locationWithCompass,
+            street: locationDetails?.street,
+            area: locationDetails?.area,
+            city: locationDetails?.city,
+            compassHeading: compass?.directionAr
+          },
           registeredFaces,
           userQuestion,
         }),
@@ -645,23 +674,23 @@ export default function BlindHomePage() {
       // 3. Torch controls
       if (/كشاف|فلاش|نور|شغل الكشاف|شغل الفلاش/.test(lower) && !/اطفي|إطفاء|اقفل/.test(lower)) {
         setTorch(true);
-        speak("تم تشغيل الكشاف.");
+        speak("شغلتلك الكشاف.");
         return;
       }
       if (/اطفي الكشاف|اقفل الكشاف|اطفي الفلاش|إطفاء النور/.test(lower)) {
         setTorch(false);
-        speak("تم إطفاء الكشاف.");
+        speak("طفيتلك الكشاف.");
         return;
       }
 
-      // 4. Location & Street Voice Command
-      if (/موقع|أين أنا|مكاني|شارع|عنوان|أنا فين|فين أنا/.test(lower)) {
+      // 4. Location & Street Voice Command (GPS Reverse Geocoding)
+      if (/موقع|أين أنا|مكاني|شارع|عنوان|أنا فين|فين أنا|احنا فين|الشارع ده ايه|اسم الشارع|مكاننا فين|مكاني فين|احنا فين دلوقتي/.test(lower)) {
         announceCurrentLocation();
         return;
       }
 
       // 4.1 Compass Heading & Direction
-      if (/بوصلة|اتجاه|متجه فين|رايح فين|فين القبلة|شمال ولا جنوب|قبلة/.test(lower)) {
+      if (/بوصلة|اتجاه|متجه فين|رايح فين|فين القبلة|شمال ولا جنوب|قبلة|باصص فين/.test(lower)) {
         announceCompassDirection();
         return;
       }
@@ -679,7 +708,7 @@ export default function BlindHomePage() {
       // 5. Emergency SOS
       if (/طوارئ|استغاثة|الحقني|مساعدة|اس او اس/.test(lower)) {
         setIsSOSOpen(true);
-        speak("تم فتح نداء الاستغاثة والطوارئ.");
+        speak("فتحتلك نداء الطوارئ والاستغاثة.");
         return;
       }
 
@@ -691,49 +720,49 @@ export default function BlindHomePage() {
 
       // 7. Reading Paper / Document / Text
       if (/ورقة|اقرأ|نص|كتابة|مكتوب|خطاب|تقرير|فاتورة|روشتة|شيك|كتاب|رسالة/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص الورقة وقراءة المكتوب بدقة...`);
+        speak(`سمعتك. ثواني بقرا الورقة والمكتوب...`);
         handleAnalyze("read_text", true, cleanTranscript);
         return;
       }
 
       // 8. Currency Counting
       if (/فلوس|عملة|جنيه|ريال|دولار|نقود|عد|احسب|باقي|فكة|كام دول|كام جنيه/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص العملات وحساب المبلغ...`);
+        speak(`سمعتك. ثواني بعد الفلوس وبحسب المبلغ...`);
         handleAnalyze("currency", true, cleanTranscript);
         return;
       }
 
       // 9. Colors & Fashion
       if (/لون|ألوان|ملابس|قميص|بنطلون|فستان|طقم|بدلة|متناسق|لابس ايه/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص ألوان وتناسق الملابس...`);
+        speak(`سمعتك. ثواني بشوفلك ألوان وتناسق اللبس...`);
         handleAnalyze("colors", true, cleanTranscript);
         return;
       }
 
       // 10. Find Object
       if (/دور|ابحث|فين|أين|مفاتيح|محفظة|نظارة|عصا|ريموت|تليفون|موبايل/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ البحث عن الشيء المفقود...`);
+        speak(`سمعتك. ثواني بدورلك على الحاجة...`);
         handleAnalyze("find_object", true, cleanTranscript);
         return;
       }
 
       // 11. Appliance & Screens
       if (/شاشة|ميكروويف|غسالة|تكييف|سكر|ضغط|حرارة|درجة/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ قراءة الشاشة والأرقام...`);
+        speak(`سمعتك. ثواني بقرا الشاشة والأرقام...`);
         handleAnalyze("appliance", true, cleanTranscript);
         return;
       }
 
       // 12. Transit & Buses
       if (/أتوبيس|اتوبيس|ميكروباص|مواصلات|عربية|خط|محطة|رايح فين/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص لافتة المواصلات...`);
+        speak(`سمعتك. ثواني بشوف يافطة العربية أو الأتوبيس...`);
         handleAnalyze("transit", true, cleanTranscript);
         return;
       }
 
       // 13. Barcode & Products
       if (/باركود|كود|منتج|علبة|سعر|صلاحية/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص المنتج والباركود...`);
+        speak(`سمعتك. ثواني بقرا الباركود وبيانات المنتج...`);
         handleAnalyze("barcode", true, cleanTranscript);
         return;
       }
@@ -746,20 +775,20 @@ export default function BlindHomePage() {
 
       // 15. Faces identification
       if (/مين|شخص|صاحبي|وجه|أمامي|من هذا|مين ده/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ التعرف على الشخص أمامك...`);
+        speak(`سمعتك. ثواني بتعرف على الشخص اللي قدامك...`);
         handleAnalyze("faces", true, cleanTranscript);
         return;
       }
 
       // 16. Obstacles
       if (/عائق|طريق|قدامي|مسافة|سلم|حفرة|رصيف|خطر/.test(lower)) {
-        speak(`سمعتك: "${cleanTranscript}". جارٍ فحص الطريق والعوائق...`);
+        speak(`سمعتك. ثواني برصدلك الطريق والعوائق...`);
         handleAnalyze("obstacle", true, cleanTranscript);
         return;
       }
 
-      // 17. ANY OTHER NATURAL QUESTION (e.g. "ايه اللي قدامي ده", "العلبة دي ايه", "شايف ايه"):
-      speak(`سمعتك: "${cleanTranscript}". جارٍ الفحص والإجابة...`);
+      // 17. ANY OTHER NATURAL QUESTION:
+      speak(`سمعتك. ثواني بشوف اللي قدامك...`);
       handleAnalyze("general", true, cleanTranscript);
     });
   };
@@ -1030,17 +1059,15 @@ export default function BlindHomePage() {
       {/* Bottom Action Grid & Shortcuts */}
       {permState === "granted" && (
         <footer className="relative z-20 px-3 pb-3 pt-1 bg-gradient-to-t from-black/95 via-black/85 to-transparent flex flex-col gap-1.5">
-          {locationName && (
-            <button
-              onClick={announceCurrentLocation}
-              aria-label={`موقعك الحالي: ${locationName}. اضغط لسماع اسم الشارع`}
-              className="flex items-center gap-2 text-[11px] text-gray-300 bg-black/80 border border-gray-800 px-3 py-1 rounded-xl active:scale-98 text-right w-full hover:border-gold-500/40"
-            >
-              <Navigation className="w-3 h-3 text-gold-400 shrink-0 animate-pulse" />
-              <span className="truncate flex-1">{locationName}</span>
-              <span className="text-[9px] text-gold-400 shrink-0">اسمع 🔊</span>
-            </button>
-          )}
+          <button
+            onClick={announceCurrentLocation}
+            aria-label={locationName ? `موقعك الحالي: ${locationName}. اضغط لسماع اسم الشارع والموقع` : "اضغط لتحديد وسماع اسم الشارع وموقعك الحالي بالـ GPS"}
+            className="flex items-center gap-2 text-[11px] text-gray-300 bg-black/80 border border-gray-800 px-3 py-1.5 rounded-xl active:scale-98 text-right w-full hover:border-gold-500/40 shadow-sm"
+          >
+            <Navigation className="w-3.5 h-3.5 text-gold-400 shrink-0 animate-pulse" />
+            <span className="truncate flex-1 font-medium">{locationDetails?.street ? `${locationDetails.street} • ${locationDetails.area || locationDetails.city || ""}` : (locationName || "تحديد اسم الشارع والموقع (GPS)")}</span>
+            <span className="text-[10px] text-gold-400 font-bold shrink-0 bg-gold-500/10 px-2 py-0.5 rounded-md border border-gold-500/20">اسم الشارع 🔊</span>
+          </button>
 
           {/* Quick Analysis Shortcut Pills */}
           <div className="grid grid-cols-6 gap-1">

@@ -16,7 +16,7 @@ export async function analyzeWithGemini(
   const model = genAI.getGenerativeModel({
     model: "gemini-3.5-flash",
     generationConfig: {
-      temperature: 0.2,
+      temperature: 0.05,
       maxOutputTokens: 600,
     }
   });
