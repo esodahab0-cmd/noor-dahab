@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   Volume2, VolumeX, Mic, Navigation, RefreshCw, LogOut,
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
-  Camera, ShieldCheck, UserPlus, Save, Zap, Flashlight,
+  Camera, ShieldCheck, UserPlus, Save, Zap,
   Shirt, Search, Monitor, Bus, QrCode, RotateCcw,
   Moon, Gauge, WifiOff, Compass, Train, Cpu
 } from "lucide-react";
@@ -483,13 +483,14 @@ export default function BlindHomePage() {
     try {
       await saveFaceLocally({ name, imageBase64: base64, relation: "شخص مقرب" });
       triggerHaptic("success");
-      speak(`تم حفظ صورة ${name} بنجاح. سأتعرف عليه فوراً عند رؤيته أمامك.`);
+      speak(`تم حفظ صورة ${name} بنجاح في ذاكرة التليفون. هتعرف عليه فوراً أول ما يظهر قدامك.`);
       setIsSaveModalOpen(false);
       setPersonNameInput("");
       setCapturedFaceBase64("");
       await loadFaces();
     } catch (e: any) {
-      speak("حدث خطأ في حفظ الصورة.");
+      triggerHaptic("error");
+      speak("معلش، تعذر حفظ صورة الشخص في الذاكرة المحلية. اتأكد إن مساحة التخزين في المتصفح مش مقفولة وجرب تاني.");
     }
   };
 
