@@ -172,6 +172,28 @@ export default function LoginPage() {
             <LogIn className="w-6 h-6" />
             {loading ? "جارٍ التحقق والدخول..." : "تسجيل الدخول"}
           </button>
+
+          {/* Guest Trial Mode Entry */}
+          <button
+            type="button"
+            onClick={() => {
+              unlockSpeaker();
+              const guestUser = {
+                username: "guest",
+                name: "زائر كريم",
+                role: "guest",
+                isGuest: true,
+              };
+              localStorage.setItem("noor_user", JSON.stringify(guestUser));
+              localStorage.setItem("noor_session_token", "guest-trial-token");
+              speak("أهلاً بك كزائر في نور دهب. جميع الميزات المحلية والمواصلات متاحة مجاناً، ومعك خمس محاولات للذكاء الاصطناعي اليوم.");
+              router.push("/");
+            }}
+            className="w-full py-3 bg-dark-700 hover:bg-dark-600 active:scale-98 text-gold-300 border border-gold-500/30 font-bold text-sm rounded-xl transition-all flex items-center justify-center gap-2"
+          >
+            <span>🚀</span>
+            <span>الدخول كزائر (تجربة مجانية)</span>
+          </button>
         </form>
 
         {/* Creator & Company Credits */}

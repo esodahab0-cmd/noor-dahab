@@ -2,12 +2,40 @@ import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
+import { checkLoginLockout, recordLoginFailure, resetLoginFailures } from "@/lib/security/rate-limiter";
+import { validateOrigin, getCorsHeaders } from "@/lib/security/cors";
 
 export async function POST(request: NextRequest) {
+  const corsHeaders = getCorsHeaders(request);
+
+  if (!validateOrigin(request)) {
+    return NextResponse.json(
+      { success: false, error: "طلب غير مصرح به: النطاق غير معتمد." },
+      { status: 403, headers: corsHeaders }
+    );
+  }
+
+  // 1. Check IP Lockout
+  const lockout = checkLoginLockout(request);
+  if (lockout.isLocked) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: `تم قفل محاولات تسجيل الدخول مؤقتاً لحماية الحساب بعد تكرار الخطأ. يرجى الانتظار ${lockout.minutesRemaining} دقيقة والمحاولة لاحقاً.`,
+        isLocked: true,
+        minutesRemaining: lockout.minutesRemaining,
+      },
+      { status: 429, headers: corsHeaders }
+    );
+  }
+
   try {
     const { username, password } = await request.json();
     if (!username || !password) {
-      return NextResponse.json({ success: false, error: "اسم المستخدم وكلمة المرور مطلوبان." }, { status: 400 });
+      return NextResponse.json(
+        { success: false, error: "اسم المستخدم وكلمة المرور مطلوبان." },
+        { status: 400, headers: corsHeaders }
+      );
     }
 
     const adminUser = process.env.ADMIN_USERNAME || "dahab";
@@ -15,47 +43,74 @@ export async function POST(request: NextRequest) {
 
     // Admin Master Login
     if (username === adminUser && password === adminPass) {
+      resetLoginFailures(request);
       const token = uuidv4();
-      return NextResponse.json({
-        success: true,
-        user: { username: "dahab", role: "admin", name: "مدير النظام (دهب)", guardianName: "", emergencyPhone: "" },
-        sessionToken: token,
-        redirect: "/admin"
-      });
+      return NextResponse.json(
+        {
+          success: true,
+          user: { username: "dahab", role: "admin", name: "مدير النظام (دهب)", guardianName: "", emergencyPhone: "" },
+          sessionToken: token,
+          redirect: "/admin"
+        },
+        { headers: corsHeaders }
+      );
     }
 
     // Normal User Login via Firestore
-    try {
-      const userRef = doc(db, "users", username);
-      const userSnap = await getDoc(userRef);
+    const userRef = doc(db, "users", username);
+    const userSnap = await getDoc(userRef);
 
-      if (!userSnap.exists()) {
-        return NextResponse.json({ success: false, error: "المستخدم غير موجود. تواصل مع المسؤول." }, { status: 401 });
-      }
+    if (!userSnap.exists()) {
+      const fail = recordLoginFailure(request);
+      const lockMsg = fail.isNowLocked
+        ? "تم تجاوز الحد الأقصى للمحاولات الخاطئة. تم قفل الحساب لمدة 15 دقيقة."
+        : `اسم المستخدم غير موجود (${5 - fail.failures} محاولات متبقية).`;
+      return NextResponse.json(
+        { success: false, error: lockMsg },
+        { status: 401, headers: corsHeaders }
+      );
+    }
 
-      const userData = userSnap.data();
+    const userData = userSnap.data();
 
-      if (userData.password !== password) {
-        return NextResponse.json({ success: false, error: "كلمة المرور غير صحيحة." }, { status: 401 });
-      }
+    if (userData.password !== password) {
+      const fail = recordLoginFailure(request);
+      const lockMsg = fail.isNowLocked
+        ? "تم تجاوز الحد الأقصى للمحاولات الخاطئة. تم قفل الحساب لمدة 15 دقيقة."
+        : `كلمة المرور غير صحيحة (${5 - fail.failures} محاولات متبقية).`;
+      return NextResponse.json(
+        { success: false, error: lockMsg },
+        { status: 401, headers: corsHeaders }
+      );
+    }
 
-      if (userData.isActive === false) {
-        return NextResponse.json({ success: false, error: "هذا الحساب معطل. تواصل مع المسؤول." }, { status: 403 });
-      }
+    if (userData.isActive === false) {
+      return NextResponse.json(
+        { success: false, error: "هذا الحساب معطل. تواصل مع إدارة دهب سوفتوير." },
+        { status: 403, headers: corsHeaders }
+      );
+    }
 
-      if (userData.expiresAt && new Date(userData.expiresAt).getTime() < Date.now()) {
-        return NextResponse.json({ success: false, error: "انتهت صلاحية هذا الحساب. تواصل مع المسؤول." }, { status: 403 });
-      }
+    if (userData.expiresAt && new Date(userData.expiresAt).getTime() < Date.now()) {
+      return NextResponse.json(
+        { success: false, error: "انتهت صلاحية هذا الحساب. تواصل مع إدارة دهب سوفتوير." },
+        { status: 403, headers: corsHeaders }
+      );
+    }
 
-      const sessionToken = uuidv4();
-      await setDoc(userRef, {
-        ...userData,
-        activeSessionToken: sessionToken,
-        isOnline: true,
-        lastLoginAt: new Date().toISOString()
-      }, { merge: true });
+    // Successful login: reset failures
+    resetLoginFailures(request);
 
-      return NextResponse.json({
+    const sessionToken = uuidv4();
+    await setDoc(userRef, {
+      ...userData,
+      activeSessionToken: sessionToken,
+      isOnline: true,
+      lastLoginAt: new Date().toISOString()
+    }, { merge: true });
+
+    return NextResponse.json(
+      {
         success: true,
         user: {
           username: userData.username || username,
@@ -66,18 +121,13 @@ export async function POST(request: NextRequest) {
         },
         sessionToken,
         redirect: "/"
-      });
-    } catch (e: any) {
-      // Dev/Offline fallback
-      const sessionToken = uuidv4();
-      return NextResponse.json({
-        success: true,
-        user: { username, role: "user", name: username, guardianName: "", emergencyPhone: "" },
-        sessionToken,
-        redirect: "/"
-      });
-    }
+      },
+      { headers: corsHeaders }
+    );
   } catch (e: any) {
-    return NextResponse.json({ success: false, error: e.message }, { status: 500 });
+    return NextResponse.json(
+      { success: false, error: e.message || "فشل تسجيل الدخول." },
+      { status: 500, headers: corsHeaders }
+    );
   }
 }

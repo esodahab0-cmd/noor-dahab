@@ -1,16 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateOrigin, getCorsHeaders } from "@/lib/security/cors";
+import { checkRateLimit } from "@/lib/security/rate-limiter";
 
 // Local in-memory cache for audio clips to deliver zero-latency repeated phrases
 const ttsCache = new Map<string, { buffer: ArrayBuffer; timestamp: number }>();
 const MAX_CACHE_SIZE = 150;
 
 export async function GET(request: NextRequest) {
+  const corsHeaders = getCorsHeaders(request);
+
+  if (!validateOrigin(request)) {
+    return new NextResponse("Unauthorized Origin", { status: 403, headers: corsHeaders });
+  }
+
+  // Rate limiting for TTS audio requests (60 per minute per IP)
+  const rateLimit = checkRateLimit(request, 60, 60 * 1000);
+  if (!rateLimit.allowed) {
+    return new NextResponse("Rate limit exceeded", { status: 429, headers: corsHeaders });
+  }
+
   try {
     const { searchParams } = new URL(request.url);
     const text = searchParams.get("text");
 
     if (!text || !text.trim()) {
-      return new NextResponse("Text parameter required", { status: 400 });
+      return new NextResponse("Text parameter required", { status: 400, headers: corsHeaders });
     }
 
     const cleanText = text.trim().slice(0, 450);

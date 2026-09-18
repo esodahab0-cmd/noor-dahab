@@ -22,6 +22,7 @@ import { saveFaceLocally, getAllSavedFaces, SavedFace } from "@/lib/utils/faces-
 import { scanBarcodeLocally } from "@/lib/utils/barcode";
 import { detectObjectsLocally, preWarmLocalModel } from "@/lib/ai/local-object-detector";
 import { findNearestMetroStation, NearestMetroResult } from "@/lib/utils/metro-navigator";
+import { getGuestTrialStatus, consumeGuestTrialAttempt, GUEST_EXHAUSTED_MESSAGE } from "@/lib/utils/guest-trial";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -671,6 +672,16 @@ export default function BlindHomePage() {
         setTorch(true, false);
       }
 
+      // Guest Trial Check: Limit unauthenticated visitors to 5 cloud AI analyses daily
+      const trialStatus = getGuestTrialStatus();
+      if (trialStatus.isGuest && !trialStatus.hasRemaining) {
+        triggerHaptic("error");
+        setCurrentResult(GUEST_EXHAUSTED_MESSAGE);
+        speak(GUEST_EXHAUSTED_MESSAGE);
+        setAnalyzing(false);
+        return;
+      }
+
       const user = JSON.parse(localStorage.getItem("noor_user") || "{}");
       const token = localStorage.getItem("noor_session_token") || "";
       const registeredFaces = savedFaces.map(f => ({ name: f.name, description: f.relation || "شخص مقرب" }));
@@ -721,6 +732,9 @@ export default function BlindHomePage() {
       historyIndexRef.current = -1;
       setCurrentResult(data.text);
       speak(data.text);
+
+      // Consume 1 trial attempt if user is guest
+      consumeGuestTrialAttempt();
     } catch (err: any) {
       triggerHaptic("error");
       const msg = err.message || "حدث خطأ أثناء فحص الصورة.";
