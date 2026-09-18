@@ -17,11 +17,12 @@ export function getGeminiPoolCount(): number {
   return rawKeys.length;
 }
 
-// Active Gemini models with automated failover (official Google AI API names 2025-2026)
+// Active & Supported Gemini models with automated failover
 const ACTIVE_MODELS = [
-  "gemini-1.5-flash-latest",
-  "gemini-1.5-flash-8b-latest",
-  "gemini-1.5-pro-latest"
+  "gemini-3.8-flash",
+  "gemini-3.6-flash",
+  "gemini-flash-latest",
+  "gemini-flash-lite-latest"
 ];
 
 let currentKeyIndex = 0;
