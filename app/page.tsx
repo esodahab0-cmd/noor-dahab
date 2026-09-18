@@ -1142,7 +1142,7 @@ export default function BlindHomePage() {
               title="الكشاف"
               aria-label="الكشاف"
             >
-              <Flashlight className="w-4 h-4" />
+              <Zap className="w-4 h-4" />
             </button>
           )}
 
