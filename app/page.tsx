@@ -309,19 +309,21 @@ export default function BlindHomePage() {
     let stream: MediaStream | null = null;
     let lastErr: any = null;
 
-    const attempts = [
-      { video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false },
-      { video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false },
-      { video: { facingMode: "environment" }, audio: false },
-      { video: true, audio: false }
-    ];
-
-    for (const constraint of attempts) {
+    // Instant Fast Camera Capture: Ideal environment back camera with automatic fallback
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: { ideal: "environment" },
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+    } catch (err: any) {
       try {
-        stream = await navigator.mediaDevices.getUserMedia(constraint);
-        if (stream) break;
-      } catch (err: any) {
-        lastErr = err;
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      } catch (fallbackErr: any) {
+        lastErr = fallbackErr || err;
       }
     }
 
@@ -344,14 +346,7 @@ export default function BlindHomePage() {
       vid.setAttribute("playsinline", "true");
       vid.setAttribute("webkit-playsinline", "true");
       vid.srcObject = stream;
-
-      try {
-        await vid.play();
-      } catch (playErr) {
-        vid.onloadedmetadata = () => {
-          vid.play().catch(() => {});
-        };
-      }
+      vid.play().catch(() => {});
     }
 
     setCameraReady(true);
@@ -359,19 +354,9 @@ export default function BlindHomePage() {
     unlockSpeaker();
     requestWakeLock();
 
-    // Pre-request microphone permission so voice commands work instantly without extra prompts
-    try {
-      if (navigator.mediaDevices?.getUserMedia) {
-        const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        audioStream.getTracks().forEach(t => t.stop());
-      }
-    } catch (micErr) {
-      console.warn("Microphone initial permission warmup:", micErr);
-    }
-
     setTimeout(() => {
-      speak("تم تشغيل الكاميرا والميكروفون بنجاح. نور دهب في خدمتك الآن. المس الشاشة للوصف أو اضغط تحدث لأي سؤال.");
-    }, 200);
+      speak("تم تشغيل الكاميرا بنجاح. نور دهب في خدمتك الآن.");
+    }, 100);
 
     if (navigator.geolocation) {
       const updateGeo = async (pos: GeolocationPosition) => {
@@ -431,13 +416,17 @@ export default function BlindHomePage() {
     if (!raw) { router.push("/login"); return; }
     const user = JSON.parse(raw);
     setUserProfile(user);
-    preWarmLocalModel();
 
     // Restore saved active mode preference if exists
     try {
       const savedMode = localStorage.getItem("noor_preferred_mode") as AnalysisMode;
       if (savedMode) setActiveMode(savedMode);
     } catch {}
+
+    // Delay heavy background AI pre-warming so UI and camera stay blazing fast
+    const timer = setTimeout(() => {
+      preWarmLocalModel();
+    }, 6000);
 
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
