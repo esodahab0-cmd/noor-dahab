@@ -144,7 +144,8 @@ export default function BlindHomePage() {
     if (!cameraReady) return;
 
     const radarTimer = setInterval(() => {
-      if (!videoRef.current || analyzing || isListening) return;
+      // Avoid interrupting companion mode, active speech, or listening sessions
+      if (!videoRef.current || analyzing || isListening || isSpeaking || companionMode) return;
       const res = analyzeFrameForHazards(videoRef.current);
       if (res.hazardDetected) {
         const now = Date.now();
@@ -159,7 +160,7 @@ export default function BlindHomePage() {
     }, 250);
 
     return () => clearInterval(radarTimer);
-  }, [cameraReady, analyzing, isListening, speak, triggerHaptic, playChime]);
+  }, [cameraReady, analyzing, isListening, isSpeaking, companionMode, speak, triggerHaptic, playChime]);
 
   // ── Load Saved Faces ──────────────────────────────────────────
   const loadFaces = useCallback(async () => {
@@ -526,7 +527,13 @@ export default function BlindHomePage() {
         }
       },
       (err) => {
-        speak("فعل خدمة الـ GPS وتحديد الموقع في تليفونك عشان أقولك اسم الشارع والمكان بالظبط.");
+        if (err.code === 1) {
+          speak("إذن تحديد الموقع مرفوض. يرجى الضغط على القفل أعلى المتصفح والسماح للـ GPS.");
+        } else if (err.code === 3) {
+          speak("انتهت مهلة قراءة الـ GPS. اتأكد إنك في مكان مفتوح وجرب تاني.");
+        } else {
+          speak("فعل خدمة الـ GPS وتحديد الموقع في تليفونك عشان أقولك اسم الشارع والمكان بالظبط.");
+        }
       },
       { enableHighAccuracy: true, timeout: 12000 }
     );
