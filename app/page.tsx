@@ -77,6 +77,10 @@ export default function BlindHomePage() {
   const handleVoiceCommandRef = useRef<() => void>(() => {});
   const lastRadarWarningTimeRef = useRef<number>(0);
 
+  // Description Session History (Last 10 descriptions)
+  const [descriptionHistory, setDescriptionHistory] = useState<string[]>([]);
+  const historyIndexRef = useRef<number>(-1);
+
   // Hardware Sensors Hook
   const {
     isOnline,
@@ -85,7 +89,9 @@ export default function BlindHomePage() {
     releaseWakeLock,
     isBlackoutMode,
     toggleBlackoutMode,
-    compass
+    compass,
+    batteryLevel,
+    isCharging
   } = useDeviceSensors({
     onShake: () => {
       if (permState === "granted" && !analyzing) {
@@ -203,6 +209,82 @@ export default function BlindHomePage() {
       speak("لا يوجد وصف سابق بعد. المس الشاشة لوصف ما أمامك.");
     }
   }, [speak, triggerHaptic, playChime, unlockSpeaker]);
+
+  // ── Session History Navigation (السابق والتالي) ───────────────
+  const handleHistoryPrevious = useCallback(() => {
+    triggerHaptic("medium");
+    playChime(440, 0.1);
+    if (descriptionHistory.length === 0) {
+      speak("لسه مفيش أوصاف محفوظة في جلستك الحالية.");
+      return;
+    }
+    const nextIdx = historyIndexRef.current === -1
+      ? descriptionHistory.length - 2
+      : historyIndexRef.current - 1;
+
+    if (nextIdx < 0) {
+      speak("ده أول وصف تم التقاطه في الجلسة دي، مفيش حاجة قبله.");
+      return;
+    }
+
+    historyIndexRef.current = nextIdx;
+    const item = descriptionHistory[nextIdx];
+    const announcement = `الوصف السابق رقم ${nextIdx + 1}: ${item}`;
+    setCurrentResult(announcement);
+    speak(announcement);
+  }, [descriptionHistory, triggerHaptic, playChime, speak]);
+
+  const handleHistoryNext = useCallback(() => {
+    triggerHaptic("medium");
+    playChime(587, 0.1);
+    if (descriptionHistory.length === 0 || historyIndexRef.current === -1) {
+      speak("أنت بتسمع أحدث وصف بالفعل.");
+      return;
+    }
+    const nextIdx = historyIndexRef.current + 1;
+    if (nextIdx >= descriptionHistory.length) {
+      historyIndexRef.current = -1;
+      speak(`رجعت لآخر وصف حديث: ${lastDescriptionRef.current}`);
+      return;
+    }
+
+    historyIndexRef.current = nextIdx;
+    const item = descriptionHistory[nextIdx];
+    const announcement = `الوصف التالي رقم ${nextIdx + 1}: ${item}`;
+    setCurrentResult(announcement);
+    speak(announcement);
+  }, [descriptionHistory, triggerHaptic, playChime, speak]);
+
+  // ── Comprehensive Audio Help Guide ("ساعدني" / "الأوامر") ───
+  const speakHelpGuide = useCallback(() => {
+    triggerHaptic("success");
+    playChime(660, 0.15);
+    const guide = "أهلاً بك في دليل نور دهب الصوتي. تقدر تطلب مني بصوتك أي حاجة في أي وقت: " +
+      "1. اسأل: أنا فين أو اسم الشارع، عشان أقولك مكانك بالـ جي بي إس. " +
+      "2. اسأل: فين المترو أو أقرب محطة، عشان أحسبلك المسافة بالخطوات والدقائق. " +
+      "3. قول: اقرأ أو ورقة، عشان أقرالك أي كتابة أو يافطة. " +
+      "4. قول: عد الفلوس، لحساب الجنيهات بدقة تامة. " +
+      "5. قول: افحص محلي، للتعرف على العربيات والعوائق فورا بدون إنترنت. " +
+      "6. قول: نسبة البطارية، لمعرفة شحن الموبايل. " +
+      "7. قول: اللي قبله أو السابق، لإعادة الأوصاف القديمة. " +
+      "8. أو المس الشاشة لمسة واحدة في أي وقت لوصف فوري شامل.";
+    setCurrentResult("دليل المساعدة الصوتي الشامل");
+    speak(guide);
+  }, [triggerHaptic, playChime, speak]);
+
+  // ── Battery Level Announcer ──────────────────────────────────
+  const announceBatteryLevel = useCallback(() => {
+    triggerHaptic("medium");
+    playChime(660, 0.1);
+    if (batteryLevel !== null) {
+      const chargeText = isCharging ? "والموبايل متوصل بالشاحن دلوقتي." : "والموبايل شغال على البطارية.";
+      const msg = `شحن بطارية الموبايل دلوقتي ${batteryLevel} في المية، ${chargeText}`;
+      setCurrentResult(msg);
+      speak(msg);
+    } else {
+      speak("مستشعر فحص البطارية غير متاح في متصفحك حالياً.");
+    }
+  }, [batteryLevel, isCharging, triggerHaptic, playChime, speak]);
 
   // ── Robust Camera Initialization ─────────────────────────────
   const requestPermissions = async () => {
@@ -342,7 +424,7 @@ export default function BlindHomePage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [permState, analyzing, activeMode]);
 
-  // ── Init ────────────────────────────────────────────────────
+  // ── Init & User Preferences ─────────────────────────────────
   useEffect(() => {
     const raw = localStorage.getItem("noor_user");
     if (!raw) { router.push("/login"); return; }
@@ -350,11 +432,24 @@ export default function BlindHomePage() {
     setUserProfile(user);
     preWarmLocalModel();
 
+    // Restore saved active mode preference if exists
+    try {
+      const savedMode = localStorage.getItem("noor_preferred_mode") as AnalysisMode;
+      if (savedMode) setActiveMode(savedMode);
+    } catch {}
+
     return () => {
       streamRef.current?.getTracks().forEach(t => t.stop());
       clearInterval(autoScanTimerRef.current);
     };
   }, [router]);
+
+  // Check and alert on critical low battery (below 20% and not charging)
+  useEffect(() => {
+    if (batteryLevel !== null && batteryLevel <= 20 && isCharging === false) {
+      speak(`تنبيه: شحن البطارية منخفض جداً (${batteryLevel}%). يرجى توصيل الشاحن لضمان استمرار المساعد.`);
+    }
+  }, [batteryLevel, isCharging, speak]);
 
   // ── Save Face Trigger ────────────────────────────────────────
   const triggerSaveFace = async () => {
@@ -625,6 +720,8 @@ export default function BlindHomePage() {
       }
 
       lastDescriptionRef.current = data.text;
+      setDescriptionHistory(prev => [...prev.slice(-9), data.text]);
+      historyIndexRef.current = -1;
       setCurrentResult(data.text);
       speak(data.text);
     } catch (err: any) {
@@ -779,6 +876,28 @@ export default function BlindHomePage() {
       // 4.4 Local On-Device AI Scanner (فحص محلي بدون إنترنت)
       if (/محلي|أوفلاين|افحص محلي|ذكاء محلي|من غير نت|بدون نت|رادار سريع|فحص سريع|بدون انترنت|أوف لاين|أفحص محلي|شوف اللي قدامي محلي/.test(lower)) {
         triggerLocalObjectDetection();
+        return;
+      }
+
+      // 4.5 Battery Status Voice Command (نسبة شحن البطارية)
+      if (/بطارية|شحن|نسبة الشحن|البطارية كام|شحن الموبايل|فيها كام|البطاريه/.test(lower)) {
+        announceBatteryLevel();
+        return;
+      }
+
+      // 4.6 Help Voice Guide (ساعدني / الأوامر المتاحة)
+      if (/ساعدني|مساعدة|الأوامر|الاوامر|بتعمل ايه|اعمل ايه|طريقة الاستخدام|علمني|دليل/.test(lower)) {
+        speakHelpGuide();
+        return;
+      }
+
+      // 4.7 Session History Navigation (السابق / اللي قبله / اللي بعده)
+      if (/اللي قبله|الوصف السابق|السابق|قبل كده|ارجع للوصف|قبله/.test(lower)) {
+        handleHistoryPrevious();
+        return;
+      }
+      if (/اللي بعده|الوصف التالي|التالي|بعد كده|قدم|بعده/.test(lower)) {
+        handleHistoryNext();
         return;
       }
 
@@ -1170,23 +1289,35 @@ export default function BlindHomePage() {
             </button>
           </div>
 
-          {/* Quick Analysis Shortcut Pills */}
-          <div className="grid grid-cols-6 gap-1">
+          {/* Quick Analysis Shortcut Pills with Accessible Touch-Whisper */}
+          <div className="grid grid-cols-6 gap-1" role="toolbar" aria-label="أوضاع التحليل السريع">
             {[
-              { mode: "read_text" as const, icon: <FileText className="w-3.5 h-3.5 text-gold-400" />, label: "اقرأ" },
-              { mode: "currency" as const, icon: <Banknote className="w-3.5 h-3.5 text-emerald-400" />, label: "فلوس" },
-              { mode: "colors" as const, icon: <Shirt className="w-3.5 h-3.5 text-pink-400" />, label: "ملابس" },
-              { mode: "find_object" as const, icon: <Search className="w-3.5 h-3.5 text-cyan-400" />, label: "مفقود" },
-              { mode: "appliance" as const, icon: <Monitor className="w-3.5 h-3.5 text-yellow-400" />, label: "شاشات" },
-              { mode: "transit" as const, icon: <Bus className="w-3.5 h-3.5 text-purple-400" />, label: "مواصلات" },
+              { mode: "read_text" as const, icon: <FileText className="w-3.5 h-3.5 text-gold-400" />, label: "اقرأ", speechLabel: "وضع قراءة النصوص والورق" },
+              { mode: "currency" as const, icon: <Banknote className="w-3.5 h-3.5 text-emerald-400" />, label: "فلوس", speechLabel: "وضع فحص العملات والفلوس" },
+              { mode: "colors" as const, icon: <Shirt className="w-3.5 h-3.5 text-pink-400" />, label: "ملابس", speechLabel: "وضع تناسق ألوان الملابس" },
+              { mode: "find_object" as const, icon: <Search className="w-3.5 h-3.5 text-cyan-400" />, label: "مفقود", speechLabel: "وضع البحث عن الحاجات المفقودة" },
+              { mode: "appliance" as const, icon: <Monitor className="w-3.5 h-3.5 text-yellow-400" />, label: "شاشات", speechLabel: "وضع قراءة الشاشات والأجهزة" },
+              { mode: "transit" as const, icon: <Bus className="w-3.5 h-3.5 text-purple-400" />, label: "مواصلات", speechLabel: "وضع المواصلات والأتوبيسات" },
             ].map(btn => (
               <button
                 key={btn.mode}
-                onClick={() => handleAnalyze(btn.mode)}
+                onClick={() => {
+                  try { localStorage.setItem("noor_preferred_mode", btn.mode); } catch {}
+                  handleAnalyze(btn.mode);
+                }}
+                onFocus={() => {
+                  if (typeof window !== "undefined" && "speechSynthesis" in window) {
+                    const u = new SpeechSynthesisUtterance(btn.speechLabel);
+                    u.lang = "ar-EG";
+                    u.rate = 1.3;
+                    window.speechSynthesis.speak(u);
+                  }
+                }}
                 disabled={analyzing}
+                aria-label={btn.speechLabel}
                 className={`flex flex-col items-center justify-center p-1.5 rounded-xl border transition-all active:scale-95 ${
                   activeMode === btn.mode
-                    ? "bg-gold-500/20 border-gold-500 text-white font-bold"
+                    ? "bg-gold-500/20 border-gold-500 text-white font-bold shadow-md"
                     : "bg-dark-800/80 border-gray-800 text-gray-300"
                 }`}
               >

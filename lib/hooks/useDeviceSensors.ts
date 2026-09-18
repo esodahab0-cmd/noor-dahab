@@ -127,6 +127,33 @@ export function useDeviceSensors(options?: UseDeviceSensorsOptions) {
     shortLabel: "شمال"
   });
 
+  // 5. Battery Monitor
+  const [batteryLevel, setBatteryLevel] = useState<number | null>(null);
+  const [isCharging, setIsCharging] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("getBattery" in navigator)) return;
+    let batteryObj: any = null;
+
+    (navigator as any).getBattery().then((battery: any) => {
+      batteryObj = battery;
+      const updateBattery = () => {
+        setBatteryLevel(Math.round(battery.level * 100));
+        setIsCharging(battery.charging);
+      };
+      updateBattery();
+      battery.addEventListener("levelchange", updateBattery);
+      battery.addEventListener("chargingchange", updateBattery);
+    }).catch(() => {});
+
+    return () => {
+      if (batteryObj) {
+        batteryObj.removeEventListener("levelchange", () => {});
+        batteryObj.removeEventListener("chargingchange", () => {});
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -162,6 +189,8 @@ export function useDeviceSensors(options?: UseDeviceSensorsOptions) {
     isBlackoutMode,
     setIsBlackoutMode,
     toggleBlackoutMode,
-    compass
+    compass,
+    batteryLevel,
+    isCharging
   };
 }
