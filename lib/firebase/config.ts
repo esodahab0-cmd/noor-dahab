@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -13,7 +13,18 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const db = getFirestore(app);
+
+// Initialize Firestore with robust Long-Polling fallback
+// يمنع تحذيرات 10 ثوانٍ وانقطاع WebChannel في المتصفحات والشبكات المقيدة
+let db: any;
+try {
+  db = initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+  });
+} catch {
+  db = getFirestore(app);
+}
+
 const storage = getStorage(app);
 
 export { app, db, storage };
