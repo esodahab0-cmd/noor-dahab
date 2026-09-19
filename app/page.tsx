@@ -1332,9 +1332,10 @@ export default function BlindHomePage() {
         </div>
       )}
 
-      {/* Top Bar */}
-      <header className="relative z-20 px-3 pt-3 pb-2 bg-gradient-to-b from-black/95 via-black/80 to-transparent flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      {/* Top Bar - Mobile Responsive & Overflow-Safe */}
+      <header className="relative z-20 px-3 pt-3 pb-2 bg-gradient-to-b from-black/95 via-black/80 to-transparent flex items-center justify-between gap-2">
+        {/* Right Side: Logo & Status */}
+        <div className="flex items-center gap-1.5 shrink-0">
           <Image
             src="/icons/icon-192.png"
             alt="Dahab Software"
@@ -1343,20 +1344,22 @@ export default function BlindHomePage() {
             className="w-7 h-7 rounded-lg border border-gold-500/50 shadow-md object-contain shrink-0"
             priority
           />
-          <span className="font-black text-lg text-white tracking-wide">نور دهب</span>
+          <span className="font-black text-base sm:text-lg text-white tracking-wide">نور دهب</span>
 
           {/* Offline Badge */}
           {!isOnline && (
-            <span className="px-2 py-0.5 bg-red-600/90 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 animate-pulse">
+            <span className="px-1.5 py-0.5 bg-red-600/90 text-white text-[10px] font-bold rounded-lg flex items-center gap-1 animate-pulse">
               <WifiOff className="w-3 h-3" />
-              أوفلاين
             </span>
           )}
+        </div>
 
+        {/* Center: Scrollable Tool Buttons for Mobile */}
+        <div className="flex-1 flex items-center gap-1.5 overflow-x-auto py-1 px-1 min-w-0" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
           {/* Speaker Button */}
           <button
             onClick={handleUnlockSpeaker}
-            className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all border ${
+            className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all border shrink-0 ${
               isAudioUnlocked
                 ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
                 : "bg-gold-500 text-dark-900 animate-bounce font-black border-gold-400"
@@ -1364,11 +1367,8 @@ export default function BlindHomePage() {
             aria-label="تفعيل الاسبيكر ومكبر الصوت"
           >
             <Volume2 className="w-3.5 h-3.5" />
-            {isAudioUnlocked ? "الاسبيكر شغال" : "فتح الاسبيكر 🔊"}
+            <span className="hidden sm:inline">{isAudioUnlocked ? "الاسبيكر" : "فتح الصوت"}</span>
           </button>
-        </div>
-
-        <div className="flex items-center gap-1.5">
           {/* Voice Speed Toggle */}
           <button
             onClick={() => {
@@ -1488,28 +1488,33 @@ export default function BlindHomePage() {
             <Zap className="w-3 h-3 text-gold-400" />
             {autoScanEnabled ? "مستمر ⚡" : "تلقائي"}
           </button>
+        </div>
 
-          {/* SOS */}
-          <button onClick={() => setIsSOSOpen(true)}
-            className="px-2 py-1 bg-red-600 text-white font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow">
-            <AlertTriangle className="w-3 h-3" />
-            SOS
+        {/* Left Side: Fixed SOS & Logout Buttons (Always Visible on all devices) */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* SOS Button */}
+          <button
+            onClick={() => setIsSOSOpen(true)}
+            className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow shrink-0"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>SOS</span>
           </button>
 
           {/* Guest Account Request & Exit OR Standard Logout */}
           {(userProfile?.isGuest || userProfile?.role === "guest" || userProfile?.username === "guest") ? (
             <button
               onClick={() => setIsGuestModalOpen(true)}
-              className="px-2.5 py-1 bg-gradient-to-r from-gold-500 to-amber-500 text-dark-950 font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow-md hover:brightness-110"
+              className="px-2.5 py-1 bg-gradient-to-r from-gold-500 to-amber-500 text-dark-950 font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow-lg shrink-0 border border-gold-400 animate-pulse"
               title="أنت زائر: اضغط لطلب حساب رسمي أو تسجيل الخروج"
             >
               <LogOut className="w-3.5 h-3.5" />
-              <span>خروج / طلب حساب</span>
+              <span>خروج</span>
             </button>
           ) : (
             <button
               onClick={() => { localStorage.clear(); router.push("/login"); }}
-              className="p-1.5 bg-dark-800 border border-gray-700 text-gray-400 hover:text-white rounded-xl active:scale-95"
+              className="p-1.5 bg-dark-800 border border-gray-700 text-gray-400 hover:text-white rounded-xl active:scale-95 shrink-0"
               title="تسجيل الخروج"
             >
               <LogOut className="w-4 h-4" />
@@ -1546,6 +1551,17 @@ export default function BlindHomePage() {
                 <ShieldCheck className="w-6 h-6" />
                 تشغيل الكاميرا والاسبيكر
               </button>
+
+              {(userProfile?.isGuest || userProfile?.role === "guest" || userProfile?.username === "guest") && (
+                <button
+                  type="button"
+                  onClick={() => setIsGuestModalOpen(true)}
+                  className="w-full py-2.5 bg-dark-700/80 hover:bg-dark-600 text-gold-300 border border-gold-500/30 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 transition-all"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>أنت زائر: طلب حساب رسمي أو خروج</span>
+                </button>
+              )}
             </div>
           )}
 
