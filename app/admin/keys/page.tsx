@@ -12,13 +12,14 @@ export default function AIKeysAdminPage() {
     cloudflareAccountId: "",
     cloudflareApiToken: "",
     huggingfaceKey: "",
+    openrouterKey: "",
   });
 
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [message, setMessage] = useState("");
-  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2 });
+  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2, openrouterCount: 2 });
 
   useEffect(() => {
     // Fetch key pool counts securely from server (zero client-side keys)
@@ -29,6 +30,7 @@ export default function AIKeysAdminPage() {
           setKeyStats({
             geminiCount: d.geminiCount ?? 4,
             cloudflareCount: d.cloudflareCount ?? 2,
+            openrouterCount: d.openrouterCount ?? 2,
           });
         }
       })
@@ -97,6 +99,33 @@ export default function AIKeysAdminPage() {
           {testing ? <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
           {testing ? "جارٍ الفحص الحي..." : "فحص واختبار المفاتيح بنقرة زر"}
         </button>
+      </div>
+
+      {/* OpenRouter Precision Pool Banner */}
+      <div className="p-4 sm:p-6 bg-dark-800 border-2 border-purple-500/40 rounded-2xl sm:rounded-3xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-purple-500/20 text-purple-400 rounded-xl">
+              <Layers className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">حوض مفاتيح OpenRouter الفائقة ({keyStats.openrouterCount} Keys)</h3>
+              <p className="text-xs text-gray-400">مخصص لتحليل الأدوية والروشتات بدقة فائقة بنموذج Qwen 2.5 VL 72B Instruct</p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-purple-500/20 text-purple-400 border border-purple-500/30 rounded-full text-xs font-black">
+            {keyStats.openrouterCount} مفتاح نشط
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+          {Array.from({ length: keyStats.openrouterCount }).map((_, idx) => (
+            <div key={idx} className="p-3 bg-dark-700/60 rounded-xl border border-gray-700 text-xs font-mono text-gray-300 flex items-center justify-between">
+              <span>OpenRouter Qwen 2.5 VL Token #{idx + 1}</span>
+              <span className="text-purple-400 font-bold">✓ مفعل (تحليل أدوية ودقة)</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Cloudflare Pool Banner */}
@@ -178,6 +207,20 @@ export default function AIKeysAdminPage() {
 
             <div className="p-4 bg-dark-700/60 rounded-2xl border border-gray-700 flex items-center justify-between">
               <div>
+                <p className="font-bold text-white">OpenRouter Precision Pool</p>
+                <p className="text-xs text-purple-400">Qwen 2.5 VL 72B (2 Keys)</p>
+              </div>
+              {testResults.openrouter?.status === "ok" ? (
+                <span className="text-emerald-400 font-black text-sm flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> {testResults.openrouter.latencyMs}ms
+                </span>
+              ) : (
+                <span className="text-red-400 text-xs">تعذر الاتصال</span>
+              )}
+            </div>
+
+            <div className="p-4 bg-dark-700/60 rounded-2xl border border-gray-700 flex items-center justify-between">
+              <div>
                 <p className="font-bold text-white">Cloudflare AI Pool</p>
                 <p className="text-xs text-gray-400">Llama 3.2 Vision (2 Tokens)</p>
               </div>
@@ -235,6 +278,20 @@ export default function AIKeysAdminPage() {
               className="w-full px-4 py-3 bg-dark-700 border border-gray-700 rounded-xl text-white font-mono text-sm focus:border-gold-500"
             />
             <span className="text-xs text-gray-400">مجاني من console.groq.com</span>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-purple-300 mb-1">
+              مفتاح OpenRouter API إضافي (اختياري - مدمج مفتاحان تلقائياً في السيرفر)
+            </label>
+            <input
+              type="password"
+              value={keys.openrouterKey || ""}
+              onChange={(e) => setKeys({ ...keys, openrouterKey: e.target.value })}
+              placeholder="sk-or-v1-..."
+              className="w-full px-4 py-3 bg-dark-700 border border-purple-500/40 rounded-xl text-white font-mono text-sm focus:border-purple-500"
+            />
+            <span className="text-xs text-gray-400">مخصص لنموذج Qwen 2.5 VL 72B لقراءة الأدوية والمستندات المعقدة</span>
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import { analyzeWithGroq } from "./groq";
 import { analyzeWithGeminiPool } from "./gemini-pool";
 import { analyzeWithCloudflarePool } from "./cloudflare-pool";
 import { analyzeWithHuggingFace } from "./huggingface";
+import { analyzeWithOpenRouter } from "./openrouter";
 import { canExecuteProvider, recordProviderSuccess, recordProviderFailure } from "./circuitBreaker";
 import { lookupVisionCache, saveVisionCache } from "./perceptualCache";
 
@@ -160,6 +161,31 @@ export async function processVisionWithFallback(
   const prompt = req.customPrompt || buildSystemPrompt(mode, req.locationInfo, undefined, req.userQuestion);
   const attempted: string[] = [];
 
+  // ── High Accuracy Specialized Modes (الأدوية والتحليل الدقيق): OpenRouter Qwen 2.5 VL 72B ──
+  const isSpecializedPrecisionMode = mode === "medication" || mode === "read_text" || mode === "appliance";
+  if (isSpecializedPrecisionMode && canExecuteProvider("openrouter")) {
+    try {
+      attempted.push("OpenRouter Qwen 2.5 VL 72B (Specialized Precision Tier 🎯)");
+      const customKey = keys.openrouterKey || process.env.OPENROUTER_API_KEY;
+      const r = await analyzeWithOpenRouter(imageBase64, prompt, customKey, "qwen/qwen2.5-vl-72b-instruct");
+
+      recordProviderSuccess("openrouter");
+      saveVisionCache(imageBase64, mode, r.text, "openrouter", req.userQuestion);
+
+      return {
+        success: true,
+        text: r.text,
+        provider: "openrouter",
+        latencyMs: r.latencyMs,
+        isFallback: false,
+        tierAttempted: attempted
+      };
+    } catch (e: any) {
+      recordProviderFailure("openrouter", e.message);
+      console.warn("OpenRouter Specialized Precision failed, continuing fallback pipeline:", e.message);
+    }
+  }
+
   // ── Tier 1: Google Gemini Multi-Key Rotation Pool ───────────
   if (canExecuteProvider("gemini")) {
     try {
@@ -262,6 +288,32 @@ export async function processVisionWithFallback(
     }
   } else if (hfKey) {
     attempted.push("Hugging Face (Circuit OPEN ⚠️ - Skipped)");
+  }
+
+  // ── Tier 5: OpenRouter High-Capacity Pool (Llama/Qwen VL) ──
+  if (canExecuteProvider("openrouter")) {
+    try {
+      attempted.push("OpenRouter Vision Pool (Tier 5)");
+      const customKey = keys.openrouterKey || process.env.OPENROUTER_API_KEY;
+      const r = await analyzeWithOpenRouter(imageBase64, prompt, customKey, "qwen/qwen2.5-vl-72b-instruct");
+
+      recordProviderSuccess("openrouter");
+      saveVisionCache(imageBase64, mode, r.text, "openrouter", req.userQuestion);
+
+      return {
+        success: true,
+        text: r.text,
+        provider: "openrouter",
+        latencyMs: r.latencyMs,
+        isFallback: true,
+        tierAttempted: attempted
+      };
+    } catch (e: any) {
+      recordProviderFailure("openrouter", e.message);
+      console.warn("Tier 5 OpenRouter failed:", e.message);
+    }
+  } else {
+    attempted.push("OpenRouter Vision Pool (Circuit OPEN ⚠️ - Skipped)");
   }
 
   return {

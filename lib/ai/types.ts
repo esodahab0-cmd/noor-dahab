@@ -1,4 +1,4 @@
-export type AIProvider = "groq" | "gemini" | "cloudflare" | "huggingface";
+export type AIProvider = "groq" | "gemini" | "cloudflare" | "huggingface" | "openrouter";
 
 export type AnalysisMode =
   | "general"
@@ -47,4 +47,5 @@ export interface AIKeysConfig {
   cloudflareAccountId?: string;
   cloudflareApiToken?: string;
   huggingfaceKey?: string;
+  openrouterKey?: string;
 }

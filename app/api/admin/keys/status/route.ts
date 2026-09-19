@@ -13,11 +13,13 @@ export async function GET(request: NextRequest) {
   try {
     const geminiCount = getGeminiPoolCount();
     const cloudflareCount = getCloudflareTokenCount();
+    const openrouterCount = 2; // Qwen 2.5 VL 72B Precision Pool
 
     return NextResponse.json({
       success: true,
       geminiCount,
       cloudflareCount,
+      openrouterCount,
       hasGroqEnv: Boolean(process.env.GROQ_API_KEY),
       hasHfEnv: Boolean(process.env.HUGGINGFACE_API_KEY),
       timestamp: Date.now()

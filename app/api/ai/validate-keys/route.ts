@@ -3,6 +3,7 @@ import { analyzeWithGroq } from "@/lib/ai/groq";
 import { analyzeWithGeminiPool } from "@/lib/ai/gemini-pool";
 import { analyzeWithCloudflarePool } from "@/lib/ai/cloudflare-pool";
 import { analyzeWithHuggingFace } from "@/lib/ai/huggingface";
+import { analyzeWithOpenRouter } from "@/lib/ai/openrouter";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { validateOrigin } from "@/lib/security/cors";
@@ -74,6 +75,15 @@ export async function POST(request: NextRequest) {
         results.huggingface = { status: "ok", latencyMs: Date.now() - start };
       } catch (e: any) { results.huggingface = { status: "error", message: e.message }; }
     } else { results.huggingface = { status: "no_key" }; }
+
+    // 5. Test OpenRouter (Qwen 2.5 VL 72B Pool)
+    try {
+      const customOrKey = keys.openrouterKey || process.env.OPENROUTER_API_KEY;
+      const orResult = await analyzeWithOpenRouter(testImg, testPrompt, customOrKey);
+      results.openrouter = { status: "ok", latencyMs: orResult.latencyMs, modelUsed: orResult.modelUsed };
+    } catch (e: any) {
+      results.openrouter = { status: "error", message: e.message };
+    }
 
     return NextResponse.json({ success: true, results });
   } catch (error: any) {
