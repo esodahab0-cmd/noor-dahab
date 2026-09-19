@@ -19,6 +19,7 @@ import { compressImage } from "@/lib/utils/image";
 import { AnalysisMode } from "@/lib/ai/types";
 import { PWAInstallPrompt } from "@/components/blind/PWAInstallPrompt";
 import { EmergencySOSModal } from "@/components/blind/EmergencySOSModal";
+import { GuestAccountRequestModal } from "@/components/blind/GuestAccountRequestModal";
 import { saveFaceLocally, getAllSavedFaces, SavedFace } from "@/lib/utils/faces-db";
 import { scanBarcodeLocally } from "@/lib/utils/barcode";
 import { detectObjectsLocally, preWarmLocalModel } from "@/lib/ai/local-object-detector";
@@ -71,6 +72,7 @@ export default function BlindHomePage() {
     spokenText?: string;
   } | null>(null);
   const [isSOSOpen, setIsSOSOpen] = useState(false);
+  const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>({});
   const [permState, setPermState] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
@@ -489,6 +491,32 @@ export default function BlindHomePage() {
       clearInterval(autoScanTimerRef.current);
     };
   }, [router]);
+
+  // ── Active Guest Presence Heartbeat Ping (كل 25 ثانية) ───────
+  useEffect(() => {
+    const isGuest = userProfile?.isGuest || userProfile?.role === "guest" || userProfile?.username === "guest";
+    if (!isGuest) return;
+
+    let guestId = localStorage.getItem("noor_guest_client_id");
+    if (!guestId) {
+      guestId = `gst_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+      localStorage.setItem("noor_guest_client_id", guestId);
+    }
+
+    const sendGuestPing = () => {
+      try {
+        fetch("/api/admin/guests/ping", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ guestId }),
+        }).catch(() => {});
+      } catch {}
+    };
+
+    sendGuestPing();
+    const pingInterval = setInterval(sendGuestPing, 25000);
+    return () => clearInterval(pingInterval);
+  }, [userProfile]);
 
   // Check and alert on critical low battery (below 20% and not charging)
   useEffect(() => {
@@ -1154,6 +1182,20 @@ export default function BlindHomePage() {
         return;
       }
 
+      // 4.9 Logout or Request Account Voice Command
+      if (/تسجيل خروج|تسجيل الخروج|اخرج من التطبيق|عايز اخرج|طلب حساب|عايز حساب|اعمل حساب|اشتراك جديد/.test(lower)) {
+        const isGuest = userProfile?.isGuest || userProfile?.role === "guest" || userProfile?.username === "guest";
+        if (isGuest) {
+          setIsGuestModalOpen(true);
+          speak("فتحتلك خيارات الزائر للتواصل مع المطور لطلب حساب رسمي أو تسجيل الخروج.");
+        } else {
+          speak("تم تسجيل الخروج بنجاح.");
+          localStorage.clear();
+          router.push("/login");
+        }
+        return;
+      }
+
       // 5. Emergency SOS
       if (/طوارئ|استغاثة|الحقني|مساعدة|اس او اس/.test(lower)) {
         setIsSOSOpen(true);
@@ -1454,11 +1496,25 @@ export default function BlindHomePage() {
             SOS
           </button>
 
-          <button
-            onClick={() => { localStorage.clear(); router.push("/login"); }}
-            className="p-1.5 bg-dark-800 border border-gray-700 text-gray-400 rounded-xl active:scale-95">
-            <LogOut className="w-4 h-4" />
-          </button>
+          {/* Guest Account Request & Exit OR Standard Logout */}
+          {(userProfile?.isGuest || userProfile?.role === "guest" || userProfile?.username === "guest") ? (
+            <button
+              onClick={() => setIsGuestModalOpen(true)}
+              className="px-2.5 py-1 bg-gradient-to-r from-gold-500 to-amber-500 text-dark-950 font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow-md hover:brightness-110"
+              title="أنت زائر: اضغط لطلب حساب رسمي أو تسجيل الخروج"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>خروج / طلب حساب</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => { localStorage.clear(); router.push("/login"); }}
+              className="p-1.5 bg-dark-800 border border-gray-700 text-gray-400 hover:text-white rounded-xl active:scale-95"
+              title="تسجيل الخروج"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </header>
 
@@ -1740,6 +1796,16 @@ export default function BlindHomePage() {
         locationName={locationName}
         emergencyPhone={userProfile?.emergencyPhone || ""}
         guardianName={userProfile?.guardianName || ""}
+      />
+
+      {/* Guest Account Request & Exit Modal */}
+      <GuestAccountRequestModal
+        isOpen={isGuestModalOpen}
+        onClose={() => setIsGuestModalOpen(false)}
+        onLogout={() => {
+          localStorage.clear();
+          router.push("/login");
+        }}
       />
     </main>
   );

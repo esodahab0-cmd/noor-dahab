@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Users, KeyRound, Activity, ShieldCheck, LogOut, Sparkles,
-  Menu, X, ExternalLink, ChevronLeft, Database
+  Menu, X, ExternalLink, ChevronLeft, Database, Radio
 } from "lucide-react";
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -50,18 +50,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       activeBg: "bg-blue-500/20 border-blue-500/50 text-blue-300",
     },
     {
+      href: "/admin/guests",
+      label: "الزوار النشطون الآن",
+      icon: Radio,
+      color: "text-emerald-400",
+      activeBg: "bg-emerald-500/20 border-emerald-500/50 text-emerald-300",
+    },
+    {
       href: "/admin/keys",
       label: "مفاتيح الـ AI وفاحصها",
       icon: KeyRound,
-      color: "text-emerald-400",
-      activeBg: "bg-emerald-500/20 border-emerald-500/50 text-emerald-300",
+      color: "text-amber-400",
+      activeBg: "bg-amber-500/20 border-amber-500/50 text-amber-300",
     },
     {
       href: "/admin/backup",
       label: "النسخ الاحتياطي والاسترجاع",
       icon: Database,
-      color: "text-amber-400",
-      activeBg: "bg-amber-500/20 border-amber-500/50 text-amber-300",
+      color: "text-purple-400",
+      activeBg: "bg-purple-500/20 border-purple-500/50 text-purple-300",
     },
   ];
 

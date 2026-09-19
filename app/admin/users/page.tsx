@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Users, UserPlus, ShieldX, CheckCircle, Phone, User } from "lucide-react";
-import { collection, getDocs, doc, setDoc, updateDoc } from "firebase/firestore";
+import { Users, UserPlus, ShieldX, CheckCircle, Phone, User, Trash2 } from "lucide-react";
+import { collection, getDocs, doc, setDoc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
 interface UserDoc {
@@ -86,6 +86,24 @@ export default function UsersAdminPage() {
       await updateDoc(doc(db, "users", user.id), { isActive: !user.isActive });
       await fetchUsers();
     } catch (e: any) { alert(e.message); }
+  };
+
+  const handleDeleteUser = async (user: UserDoc) => {
+    const confirmName = prompt(
+      `⚠️ تحذير أمني: أنت على وشك حذف حساب "${user.name || user.id}" نهائياً من قاعدة البيانات.\nلتأكيد الحذف اكتب اسم المستخدم: ${user.id}`
+    );
+    if (confirmName !== user.id) {
+      if (confirmName !== null) alert("لم يتم الحذف: الاسم غير مطابق.");
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, "users", user.id));
+      await fetchUsers();
+      alert(`تم حذف المستخدم ${user.id} نهائياً بنجاح.`);
+    } catch (e: any) {
+      alert("فشل حذف المستخدم: " + e.message);
+    }
   };
 
   return (
@@ -228,12 +246,22 @@ export default function UsersAdminPage() {
                   <td className="p-4 text-xs text-gray-400">
                     {u.expiresAt ? new Date(u.expiresAt).toLocaleDateString("ar-EG") : "دائم"}
                   </td>
-                  <td className="p-4">
+                  <td className="p-4 flex items-center gap-2">
                     {u.activeSessionToken && (
                       <button onClick={() => handleForceLogout(u.id)}
-                        className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-xl text-xs font-bold flex items-center gap-1">
-                        <ShieldX className="w-4 h-4" />
-                        طرد فوري
+                        className="px-2.5 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-xl text-xs font-bold flex items-center gap-1"
+                        title="طرد الجلسة النشطة">
+                        <ShieldX className="w-3.5 h-3.5" />
+                        طرد
+                      </button>
+                    )}
+
+                    {u.id !== "admin" && (
+                      <button onClick={() => handleDeleteUser(u)}
+                        className="px-2.5 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 rounded-xl text-xs font-bold flex items-center gap-1"
+                        title="حذف المستخدم نهائياً">
+                        <Trash2 className="w-3.5 h-3.5" />
+                        حذف
                       </button>
                     )}
                   </td>
