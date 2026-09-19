@@ -25,6 +25,9 @@ import { detectObjectsLocally, preWarmLocalModel } from "@/lib/ai/local-object-d
 import { findNearestMetroStation, NearestMetroResult } from "@/lib/utils/metro-navigator";
 import { getGuestTrialStatus, consumeGuestTrialAttempt, GUEST_EXHAUSTED_MESSAGE } from "@/lib/utils/guest-trial";
 import { startLightMeter, stopLightMeter, isLightMeterActive, getLightDescription } from "@/lib/utils/light-meter";
+import { analyzeDocumentFraming, resetDocumentGuidanceCounter } from "@/lib/utils/document-detector";
+import { playSpatialHazardBeep } from "@/lib/utils/spatial-audio";
+import { detectCurrencyOffline } from "@/lib/utils/offline-currency";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -161,7 +164,7 @@ export default function BlindHomePage() {
         if (now - lastRadarWarningTimeRef.current > 3500) {
           lastRadarWarningTimeRef.current = now;
           triggerHaptic("error");
-          playChime(920, 0.15);
+          playSpatialHazardBeep(res.pan, res.intensity > 0.75 ? "danger" : "warning");
           setCurrentResult(res.message);
           speak(res.message);
         }
@@ -170,6 +173,48 @@ export default function BlindHomePage() {
 
     return () => clearInterval(radarTimer);
   }, [cameraReady, analyzing, isListening, isSpeaking, companionMode, speak, triggerHaptic, playChime]);
+
+  // ── Smart Document & Paper Framing Guidance (Seeing AI style) ──
+  const [docGuidanceMessage, setDocGuidanceMessage] = useState<string>("");
+  const lastDocGuidanceTimeRef = useRef<number>(0);
+  const isAutoCapturingDocRef = useRef<boolean>(false);
+
+  useEffect(() => {
+    if (activeMode !== "read_text" || !cameraReady) {
+      resetDocumentGuidanceCounter();
+      setDocGuidanceMessage("");
+      isAutoCapturingDocRef.current = false;
+      return;
+    }
+
+    const docTimer = setInterval(() => {
+      if (!videoRef.current || analyzing || isListening || isSpeaking || isAutoCapturingDocRef.current) return;
+
+      const framing = analyzeDocumentFraming(videoRef.current);
+      setDocGuidanceMessage(framing.messageAr);
+
+      if (framing.isAligned) {
+        isAutoCapturingDocRef.current = true;
+        triggerHaptic("success");
+        playChime(784, 0.15);
+        speak("الورقة مظبوطة تماماً، جاري قراءة النص الآن...");
+        setTimeout(() => {
+          handleAnalyze("read_text", true);
+          isAutoCapturingDocRef.current = false;
+        }, 350);
+        return;
+      }
+
+      const now = Date.now();
+      if (framing.status !== "no_document" && now - lastDocGuidanceTimeRef.current > 3200) {
+        lastDocGuidanceTimeRef.current = now;
+        triggerHaptic("light");
+        speak(framing.messageAr);
+      }
+    }, 450);
+
+    return () => clearInterval(docTimer);
+  }, [activeMode, cameraReady, analyzing, isListening, isSpeaking, speak, triggerHaptic, playChime]);
 
   // ── Load Saved Faces ──────────────────────────────────────────
   const loadFaces = useCallback(async () => {
@@ -585,6 +630,22 @@ export default function BlindHomePage() {
     triggerHaptic("medium");
     playChime(550, 0.1);
 
+    // Phase 5.2: Offline Currency first — try local before COCO-SSD
+    if (activeMode === "currency") {
+      const currResult = detectCurrencyOffline(videoRef.current);
+      if (currResult.detected && currResult.denomination !== null && currResult.confidence > 0.3) {
+        triggerHaptic("success");
+        playChime(523.25, 0.12);
+        const msg = `${currResult.label}. الكشف تم محلياً بدون إنترنت بنسبة ${Math.round(currResult.confidence * 100)}%.`;
+        lastDescriptionRef.current = msg;
+        setCurrentResult(msg);
+        speak(msg);
+        return;
+      }
+      // If offline currency detection fails, speak helpful hint and continue to COCO-SSD
+      speak("جارٍ فحص العملة بالذكاء الاصطناعي المحلي...");
+    }
+
     try {
       const res = await detectObjectsLocally(videoRef.current);
       if (res.hazardDetected) {
@@ -835,9 +896,25 @@ export default function BlindHomePage() {
   }, [companionMode, cameraReady, analyzing, isListening, isSpeaking]);
 
   // ── Full-Screen Long Press & Tap Handlers ───────────────────
-  const handlePointerDown = () => {
+  // Phase 5.1: Two-finger quick double-tap = Stop Speaking (TalkBack/VoiceOver style)
+  const lastTwoFingerTapTimeRef = useRef<number>(0);
+
+  const handlePointerDown = (e: React.PointerEvent) => {
     isLongPressRef.current = false;
     clearTimeout(longPressTimerRef.current);
+
+    // Two-finger double tap = Stop speaking immediately
+    if (e.isPrimary === false) {
+      const now = Date.now();
+      if (now - lastTwoFingerTapTimeRef.current < 500) {
+        stopSpeaking();
+        triggerHaptic("medium");
+        return;
+      }
+      lastTwoFingerTapTimeRef.current = now;
+      return;
+    }
+
     if (permState === "granted") {
       longPressTimerRef.current = setTimeout(() => {
         isLongPressRef.current = true;
@@ -1083,6 +1160,15 @@ export default function BlindHomePage() {
   // ─────────────────────────────────────────────────────────────
   return (
     <main className="fixed inset-0 bg-black flex flex-col justify-between overflow-hidden select-none touch-none">
+      {/* Phase 5.1: Screen Reader aria-live assertive region (TalkBack / VoiceOver) */}
+      <div
+        aria-live="assertive"
+        aria-atomic="true"
+        className="sr-only"
+        role="alert"
+      >
+        {isSpeaking ? currentResult : ""}
+      </div>
       {/* Live Camera Feed */}
       <video
         ref={videoRef}
@@ -1346,12 +1432,17 @@ export default function BlindHomePage() {
           className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform"
         >
           <div className={`w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-3 ${
-            analyzing ? "border-blue-400 bg-blue-500/30" : isListening ? "border-red-400 bg-red-500/30 animate-pulse" : "border-gold-400 bg-gold-500/30 gold-glow"
+            analyzing ? "border-blue-400 bg-blue-500/30"
+            : isListening ? "border-red-400 bg-red-500/30 animate-pulse"
+            : (activeMode === "read_text" && docGuidanceMessage) ? "border-amber-400 bg-amber-500/20 animate-pulse"
+            : "border-gold-400 bg-gold-500/30 gold-glow"
           }`}>
             {analyzing
               ? <RefreshCw className="w-12 h-12 text-blue-300 animate-spin" />
               : isListening
               ? <Mic className="w-12 h-12 text-red-400 animate-bounce" />
+              : (activeMode === "read_text" && docGuidanceMessage)
+              ? <FileText className="w-12 h-12 text-amber-300 animate-pulse" />
               : <Eye className="w-12 h-12 text-gold-400 animate-pulse" />
             }
           </div>
@@ -1363,11 +1454,15 @@ export default function BlindHomePage() {
               ? "جارٍ التحليل السريع..."
               : isListening
               ? "أسمعك الآن، تفضل بالتحدث..."
+              : (activeMode === "read_text" && docGuidanceMessage)
+              ? `📄 ${docGuidanceMessage}`
               : currentResult}
           </p>
 
           <span className="mt-2 text-[11px] font-bold text-gold-300/90 bg-black/70 px-3 py-1 rounded-full border border-white/10">
-            نقرة للوصف • ضغط مطول للتحدث • أزرار الصوت للتصوير
+            {activeMode === "read_text"
+              ? "وضع القراءة • وجّه الورقة والكاميرا ستلتقط تلقائياً"
+              : "نقرة للوصف • ضغط مطول للتحدث • أزرار الصوت للتصوير"}
           </span>
         </div>
       )}
