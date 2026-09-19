@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Users, Radio, ShieldCheck, Key, ArrowUpRight, Cpu } from "lucide-react";
-import { collection, onSnapshot } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import Link from "next/link";
 
@@ -38,20 +38,29 @@ export default function AdminDashboardPage() {
   }, []);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      collection(db, "users"),
-      (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserDoc[];
-        setUsers(list);
-        setLoading(false);
-      },
-      (err) => {
-        console.warn("Firestore snapshot error:", err);
-        setLoading(false);
-      }
-    );
+    let isMounted = true;
 
-    return () => unsub();
+    const loadUsers = async () => {
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        if (isMounted) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserDoc[];
+          setUsers(list);
+          setLoading(false);
+        }
+      } catch (err) {
+        console.warn("Firestore fetch users fallback:", err);
+        if (isMounted) setLoading(false);
+      }
+    };
+
+    loadUsers();
+    const interval = setInterval(loadUsers, 10000); // تحديث دوري هادئ كل 10 ثوانٍ
+
+    return () => {
+      isMounted = false;
+      clearInterval(interval);
+    };
   }, []);
 
   const onlineUsers = users.filter((u) => u.isOnline || u.activeSessionToken);
