@@ -20,7 +20,7 @@ interface UserDoc {
 export default function AdminDashboardPage() {
   const [users, setUsers] = useState<UserDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2 });
+  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2, openrouterCount: 2 });
 
   useEffect(() => {
     // Fetch key pool stats securely from server (zero client-side keys)
@@ -31,6 +31,7 @@ export default function AdminDashboardPage() {
           setKeyStats({
             geminiCount: d.geminiCount ?? 4,
             cloudflareCount: d.cloudflareCount ?? 2,
+            openrouterCount: d.openrouterCount ?? 2,
           });
         }
       })
@@ -76,7 +77,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Realtime KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
         {/* Live Online Users */}
         <div className="p-4 sm:p-6 bg-dark-800 border-2 border-emerald-500/40 rounded-2xl sm:rounded-3xl space-y-2 relative overflow-hidden">
           <div className="flex items-center justify-between">
@@ -124,6 +125,18 @@ export default function AdminDashboardPage() {
             <span className="text-2xl sm:text-4xl font-black text-white">{keyStats.cloudflareCount}</span>
           </div>
           <p className="text-[10px] sm:text-xs text-gray-400">مفتاح احتياطي 200 OK</p>
+        </div>
+
+        {/* OpenRouter Keys Pool */}
+        <div className="p-4 sm:p-6 bg-dark-800 border-2 border-purple-500/30 rounded-2xl sm:rounded-3xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-purple-400 uppercase tracking-wider">حوض OpenRouter</span>
+            <Key className="w-4 h-4 sm:w-5 sm:h-5 text-purple-400" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl sm:text-4xl font-black text-white">{keyStats.openrouterCount}</span>
+          </div>
+          <p className="text-[10px] sm:text-xs text-gray-400">Qwen 2.5 VL 72B (تحليل أدوية)</p>
         </div>
       </div>
 

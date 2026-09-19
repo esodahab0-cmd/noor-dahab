@@ -85,9 +85,9 @@ export default function AIKeysAdminPage() {
     <div className="space-y-6 sm:space-y-8 max-w-4xl w-full min-w-0">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-white">إدارة وفحص مفاتيح الـ AI</h1>
+          <h1 className="text-2xl sm:text-3xl font-black text-white">إدارة وفحص مفاتيح ونماذج الـ AI</h1>
           <p className="text-gray-400 text-xs sm:text-sm mt-1">
-            مربوط به {keyStats.geminiCount} مفاتيح Google Gemini + {keyStats.cloudflareCount} مفتاح Cloudflare مع نظام تدوير آلي Fallback وحماية خادم 100%.
+            إجمالي {keyStats.geminiCount + keyStats.cloudflareCount + keyStats.openrouterCount} مفاتيح سيرفر نشطة: {keyStats.geminiCount} Google Gemini + {keyStats.cloudflareCount} Cloudflare Llama + {keyStats.openrouterCount} OpenRouter Qwen 2.5 VL مع نظام تدوير آلي وحماية 100%.
           </p>
         </div>
 
