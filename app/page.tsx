@@ -8,7 +8,7 @@ import {
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
   Camera, ShieldCheck, UserPlus, Save, Zap,
   Shirt, Search, Monitor, Bus, QrCode, RotateCcw,
-  Moon, Gauge, WifiOff, Compass, Train, Cpu, Sun
+  Moon, Gauge, WifiOff, Compass, Train, Cpu, Sun, CreditCard, Globe
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
@@ -31,6 +31,10 @@ import { playSpatialHazardBeep } from "@/lib/utils/spatial-audio";
 import { detectCurrencyOffline } from "@/lib/utils/offline-currency";
 import { optimizeImageForTask } from "@/lib/utils/smartImageOptimizer";
 import { findMatchingMedicationTag, getAllMedicationTags, MedicationAudioTag } from "@/lib/utils/medication-audio-locker";
+import { reportCrowdHazard, checkProactiveNearbyHazards } from "@/lib/geo/crowdHazards";
+import { recordDailyActivity, generateDailyImpactSpokenReport } from "@/lib/utils/dailyImpactTracker";
+import { shouldSendFrameToAI } from "@/lib/utils/frameDeltaOptimizer";
+import { evaluateProactiveContext } from "@/lib/ai/contextAwareness";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -475,10 +479,15 @@ export default function BlindHomePage() {
     const user = JSON.parse(raw);
     setUserProfile(user);
 
-    // Restore saved active mode preference if exists
+    // Restore saved active mode preference if exists or apply proactive context
     try {
       const savedMode = localStorage.getItem("noor_preferred_mode") as AnalysisMode;
-      if (savedMode) setActiveMode(savedMode);
+      if (savedMode) {
+        setActiveMode(savedMode);
+      } else {
+        const proactive = evaluateProactiveContext();
+        setActiveMode(proactive.recommendedMode);
+      }
     } catch {}
 
     // Delay heavy background AI pre-warming so UI and camera stay blazing fast
@@ -589,7 +598,18 @@ export default function BlindHomePage() {
             setLocationName(data.address);
             setLocationDetails(data);
             const headingText = compass?.directionAr ? ` وباصص ناحية ${compass.directionAr}` : "";
-            const spoken = (data.spokenText || `أنت دلوقتي في: ${data.address}`) + headingText + ".";
+            let spoken = (data.spokenText || `أنت دلوقتي في: ${data.address}`) + headingText + ".";
+
+            // فحص المخاطر التشاركية الجماعية الاستباقية (Waze للمكفوفين)
+            try {
+              const hazardAlert = await checkProactiveNearbyHazards(lat, lon);
+              if (hazardAlert.hasHazard && hazardAlert.warningText) {
+                spoken += ` ⚠️ ${hazardAlert.warningText}`;
+                triggerHaptic("error");
+                playChime(880, 0.2);
+              }
+            } catch {}
+
             lastDescriptionRef.current = spoken;
             setCurrentResult(spoken);
             speak(spoken);
@@ -777,6 +797,7 @@ export default function BlindHomePage() {
         barcode: "بقرالك بيانات المنتج والباركود...",
         companion: "ماشي معاك ومرافقك في الطريق...",
         followup: "بجاوبك على استفسارك من نفس الصورة...",
+        pos_shield: "بفحص شاشة الدفع وماكينة الـ POS للتأكد من المبلغ...",
       };
       speak(labels[mode] || "بفحص الصورة...");
     } else if (useCachedImage && userQuestion) {
@@ -950,6 +971,22 @@ export default function BlindHomePage() {
       setCurrentResult(fullText);
       speak(fullText);
 
+      // تسجيل نشاط اليوم للإحصائيات التراكمية الصوتية
+      try {
+        const activityMap: Record<string, "text" | "currency" | "obstacle" | "location"> = {
+          read_text: "text",
+          document: "text",
+          currency: "currency",
+          pos_shield: "currency",
+          obstacle: "obstacle",
+          companion: "obstacle",
+          location: "location",
+          transit: "location"
+        };
+        const actType = activityMap[mode];
+        if (actType) recordDailyActivity(actType);
+      } catch {}
+
       // Consume 1 trial attempt if user is guest
       consumeGuestTrialAttempt();
     } catch (err: any) {
@@ -988,6 +1025,9 @@ export default function BlindHomePage() {
           triggerLocalObjectDetection();
           return;
         }
+
+        // تحسين معدل الإطارات: لا نرسل للذكاء الاصطناعي إذا كان المشهد ثابتاً تماماً
+        if (!shouldSendFrameToAI(videoRef.current, 12)) return;
 
         handleAnalyze("companion", true);
       }, 3200);
@@ -1193,6 +1233,46 @@ export default function BlindHomePage() {
           localStorage.clear();
           router.push("/login");
         }
+        return;
+      }
+
+      // 4.10 Daily Impact Report (تقرير الإنجازات اليومي)
+      if (/إنجازاتي|انجازاتي|تقرير اليوم|عملت ايه|ساعدتني كام مرة|ملخص اليوم/.test(lower)) {
+        const report = generateDailyImpactSpokenReport();
+        speak(report);
+        return;
+      }
+
+      // 4.11 Report Crowd Hazard ("Waze للمكفوفين")
+      if (/احفظ هنا|سجل خطر|فيه حفرة|رصيف مكسور|بلاعة مفتوحة|سجل عائق/.test(lower)) {
+        if (locationCoords?.lat && locationCoords?.lon) {
+          const description = cleanTranscript.replace(/احفظ هنا|سجل خطر/g, "").trim() || "خطر مرصود في الطريق";
+          reportCrowdHazard(locationCoords.lat, locationCoords.lon, description)
+            .then(() => {
+              triggerHaptic("success");
+              speak("تم حفظ الخطر في الخريطة وسيتم تنبيه المكفوفين القريبين منه فوراً.");
+            })
+            .catch(() => {
+              speak("تعذر حفظ الخطر حالياً، تأكد من الاتصال بالإنترنت.");
+            });
+        } else {
+          speak("فعّل الـ GPS الأول عشان أحفظ إحداثيات الخطر بالظبط.");
+        }
+        return;
+      }
+
+      // 4.12 Proactive Context Mode (الوعي السياقي الاستباقي)
+      if (/وضع تلقائي|اختار الوضع|وضع ذكي|اختار انت الوضع/.test(lower)) {
+        const ctx = evaluateProactiveContext(locationName || "");
+        setActiveMode(ctx.recommendedMode);
+        speak(ctx.reason);
+        return;
+      }
+
+      // 4.13 Electronic Payment / POS Shield Mode (حارس الدفع وماكينات POS)
+      if (/دفع|فيزا|ماكينة فوري|مكنة فوري|كارت بنك|شاشة الدفع|pos|حارس الدفع/.test(lower)) {
+        speak("شغلتلك حارس الدفع الإلكتروني. وجّه الكاميرا لشاشة ماكينة الدفع للتأكد من المبلغ قبل كتابة الرقم السري.");
+        handleAnalyze("pos_shield", true, cleanTranscript);
         return;
       }
 
@@ -1673,10 +1753,12 @@ export default function BlindHomePage() {
           </div>
 
           {/* Quick Analysis Shortcut Pills with Accessible Touch-Whisper */}
-          <div className="grid grid-cols-6 gap-1" role="toolbar" aria-label="أوضاع التحليل السريع">
+          <div className="grid grid-cols-4 gap-1" role="toolbar" aria-label="أوضاع التحليل السريع">
             {[
+              { mode: "general" as const, icon: <Globe className="w-3.5 h-3.5 text-blue-400" />, label: "عام", speechLabel: "وضع الوصف العام للمشهد" },
               { mode: "read_text" as const, icon: <FileText className="w-3.5 h-3.5 text-gold-400" />, label: "اقرأ", speechLabel: "وضع قراءة النصوص والورق" },
               { mode: "currency" as const, icon: <Banknote className="w-3.5 h-3.5 text-emerald-400" />, label: "فلوس", speechLabel: "وضع فحص العملات والفلوس" },
+              { mode: "pos_shield" as const, icon: <CreditCard className="w-3.5 h-3.5 text-green-400" />, label: "دفع", speechLabel: "وضع حارس الدفع الإلكتروني وماكينة POS" },
               { mode: "colors" as const, icon: <Shirt className="w-3.5 h-3.5 text-pink-400" />, label: "ملابس", speechLabel: "وضع تناسق ألوان الملابس" },
               { mode: "find_object" as const, icon: <Search className="w-3.5 h-3.5 text-cyan-400" />, label: "مفقود", speechLabel: "وضع البحث عن الحاجات المفقودة" },
               { mode: "appliance" as const, icon: <Monitor className="w-3.5 h-3.5 text-yellow-400" />, label: "شاشات", speechLabel: "وضع قراءة الشاشات والأجهزة" },

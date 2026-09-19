@@ -14,7 +14,8 @@ export type AnalysisMode =
   | "transit"
   | "barcode"
   | "companion"
-  | "followup";
+  | "followup"
+  | "pos_shield";
 
 export interface AIAnalysisRequest {
   imageBase64: string;
@@ -26,6 +27,7 @@ export interface AIAnalysisRequest {
   };
   customPrompt?: string;
   userQuestion?: string;
+  conversationHistory?: Array<{ role: "user" | "assistant"; text: string }>;
 }
 
 export interface AIAnalysisResponse {
