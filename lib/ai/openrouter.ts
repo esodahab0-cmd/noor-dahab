@@ -53,6 +53,7 @@ export async function analyzeWithOpenRouter(
       "HTTP-Referer": "https://dahabsoftware.online",
       "X-Title": "Noor Dahab AI Blind Assistant",
     },
+    signal: AbortSignal.timeout(12000),
     body: JSON.stringify({
       model: modelName,
       max_tokens: 600,
