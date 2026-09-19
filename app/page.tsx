@@ -45,7 +45,7 @@ export default function BlindHomePage() {
   const autoScanTimerRef = useRef<any>(null);
   const longPressTimerRef = useRef<any>(null);
   const isLongPressRef = useRef(false);
-  const lastDescriptionRef = useRef<string>("أهلاً بك في نور دهب. المس الشاشة في أي مكان لبدء الوصف.");
+  const lastDescriptionRef = useRef<string>("أهلاً بك في نور دهب. المس الشاشة في أي مكان وتحدث بحرية لطلب ما تريد أو طرح أي سؤال، أو المس مرتين سريعتين للوصف المباشر.");
 
   const {
     speak,
@@ -322,15 +322,12 @@ export default function BlindHomePage() {
   const speakHelpGuide = useCallback(() => {
     triggerHaptic("success");
     playChime(660, 0.15);
-    const guide = "أهلاً بك في دليل نور دهب الصوتي. تقدر تطلب مني بصوتك أي حاجة في أي وقت: " +
-      "1. اسأل: أنا فين أو اسم الشارع، عشان أقولك مكانك بالـ جي بي إس. " +
-      "2. اسأل: فين المترو أو أقرب محطة، عشان أحسبلك المسافة بالخطوات والدقائق. " +
-      "3. قول: اقرأ أو ورقة، عشان أقرالك أي كتابة أو يافطة. " +
-      "4. قول: عد الفلوس، لحساب الجنيهات بدقة تامة. " +
-      "5. قول: افحص محلي، للتعرف على العربيات والعوائق فورا بدون إنترنت. " +
-      "6. قول: نسبة البطارية، لمعرفة شحن الموبايل. " +
-      "7. قول: اللي قبله أو السابق، لإعادة الأوصاف القديمة. " +
-      "8. أو المس الشاشة لمسة واحدة في أي وقت لوصف فوري شامل.";
+    const guide = "أهلاً بك في دليل نور دهب الصوتي المطور. المس الشاشة في أي مكان وتكلم بحرية تامة: " +
+      "1. اسألني أي سؤال علمي أو عام أو استفسار وهجاوبك بصوتي فوراً. " +
+      "2. اطلب فحص اللي قدامك: قول شوف قدامي، أو اقرأ ورقة، أو عد الفلوس، أو فحص الدواء، أو ماكينة الدفع. " +
+      "3. اسأل: أنا فين لمعرفة اسم الشارع، أو فين المترو لأقرب محطة بالخطوات. " +
+      "4. قول: كشاف، أو حساس النور، أو وضع التوفير، أو نسبة البطارية للتحكم في الموبايل. " +
+      "5. تقدر تلمس الشاشة لمستين سريعتين في أي وقت لتصوير ووصف المشهد فوراً بالكاميرا.";
     setCurrentResult("دليل المساعدة الصوتي الشامل");
     speak(guide);
   }, [triggerHaptic, playChime, speak]);
@@ -798,6 +795,7 @@ export default function BlindHomePage() {
         companion: "ماشي معاك ومرافقك في الطريق...",
         followup: "بجاوبك على استفسارك من نفس الصورة...",
         pos_shield: "بفحص شاشة الدفع وماكينة الـ POS للتأكد من المبلغ...",
+        chat: "بجاوبك على سؤالك...",
       };
       speak(labels[mode] || "بفحص الصورة...");
     } else if (useCachedImage && userQuestion) {
@@ -1070,6 +1068,51 @@ export default function BlindHomePage() {
     clearTimeout(longPressTimerRef.current);
   };
 
+  // ── Conversational & Knowledge AI (الرد الصوتي على الأسئلة المعرفية والعلمية دون كاميرا) ──
+  const handleConversationalAI = async (question: string) => {
+    if (!question.trim()) return;
+    setAnalyzing(true);
+    triggerHaptic("medium");
+    playChime(523.25, 0.08);
+    setCurrentResult(`سؤالك: "${question}"... بجاوبك`);
+    speak("ثواني، بجاوبك على سؤالك...");
+
+    try {
+      const stored = localStorage.getItem("noor_user");
+      const user = stored ? JSON.parse(stored) : {};
+      const token = localStorage.getItem("noor_session_token") || "";
+
+      const res = await fetch("/api/ai/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-session-token": token,
+          "x-username": user.username || "",
+        },
+        body: JSON.stringify({
+          mode: "chat",
+          userQuestion: question,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.text || data.error || "تعذر الحصول على إجابة");
+      const answer = data.text || "أهلاً بك، أنا رفيقك ومساعدك الذكي نور دهب، وجاهز لمساعدتك دائماً.";
+
+      setCurrentResult(answer);
+      lastDescriptionRef.current = answer;
+      setDescriptionHistory((prev) => [...prev.slice(-9), answer]);
+      speak(answer);
+    } catch (err: any) {
+      triggerHaptic("error");
+      const msg = err.message || "معلش، حصلت مشكلة في الرد على سؤالك. جرب تاني.";
+      setCurrentResult(msg);
+      speak(msg);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
   const handleCenterTap = () => {
     if (isLongPressRef.current) return;
     if (!isAudioUnlocked) unlockSpeaker();
@@ -1079,6 +1122,8 @@ export default function BlindHomePage() {
     }
     tapCountRef.current += 1;
     clearTimeout(tapTimerRef.current);
+
+    // 4 نقرات متتالية = نداء طوارئ SOS
     if (tapCountRef.current >= 4) {
       tapCountRef.current = 0;
       triggerHaptic("error");
@@ -1086,10 +1131,21 @@ export default function BlindHomePage() {
       speak("تم فتح نداء الاستغاثة والطوارئ.");
       return;
     }
+
     tapTimerRef.current = setTimeout(() => {
+      const count = tapCountRef.current;
       tapCountRef.current = 0;
-      handleAnalyze(activeMode);
-    }, 300);
+
+      // نقرتان سريعتان (Double Tap) = تصوير ووصف المشهد فوري بالكاميرا
+      if (count >= 2) {
+        triggerHaptic("medium");
+        handleAnalyze(activeMode);
+      } else {
+        // نقرة واحدة (Single Tap) = المساعد الصوتي يستمع لطلب الكفيف أولاً!
+        triggerHaptic("light");
+        handleVoiceCommand();
+      }
+    }, 280);
   };
 
   // ── Comprehensive Voice Assistant Command Processor ─────────
@@ -1367,9 +1423,17 @@ export default function BlindHomePage() {
         return;
       }
 
-      // 17. ANY OTHER NATURAL QUESTION:
-      speak(`سمعتك. ثواني بشوف اللي قدامك...`);
-      handleAnalyze("general", true, cleanTranscript);
+      // 17. فحص نية السؤال: هل هو طلب بصري للكاميرا أم سؤال عام/علمي/محادثة؟
+      const isVisionIntent = /شوف|بص|قدامي|أمامي|شايف|صورة|أوصف|اوصف|مشهد|منظر|غرفة|شارع|حواليا|إيه ده|ايه ده|كوباية|كرسي|ترابيزة|باب|شباك|تليفزيون|افحص|صور/.test(lower);
+
+      if (isVisionIntent || !cleanTranscript) {
+        speak("سمعتك. ثواني بشوف اللي قدامك بالكاميرا...");
+        handleAnalyze(activeMode || "general", true, cleanTranscript);
+        return;
+      }
+
+      // 18. أسئلة علمية، معرفية، عامة، أو محادثة مع المساعد الصوتي الذكي (Conversational AI)
+      handleConversationalAI(cleanTranscript);
     });
   };
 

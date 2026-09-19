@@ -15,10 +15,11 @@ export type AnalysisMode =
   | "barcode"
   | "companion"
   | "followup"
-  | "pos_shield";
+  | "pos_shield"
+  | "chat";
 
 export interface AIAnalysisRequest {
-  imageBase64: string;
+  imageBase64?: string;
   mode?: AnalysisMode;
   locationInfo?: {
     latitude?: number;

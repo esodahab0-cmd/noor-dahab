@@ -66,9 +66,9 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { imageBase64, mode = "general", locationInfo, registeredFaces, userQuestion } = body;
 
-    if (!imageBase64) {
+    if (!imageBase64 && mode !== "chat") {
       return NextResponse.json(
-        { error: "الصورة مطلوبة للتحليل." },
+        { error: "الصورة مطلوبة للتحليل البصري." },
         { status: 400, headers: rateLimitHeaders }
       );
     }

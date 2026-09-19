@@ -37,9 +37,15 @@ export async function analyzeWithGeminiPool(
     ? [...customKeys, ...DEFAULT_GEMINI_KEYS] 
     : DEFAULT_GEMINI_KEYS;
 
-  const base64Data = imageBase64.replace(/^data:image\/\w+;base64,/, '');
+  const base64Data = imageBase64 ? imageBase64.replace(/^data:image\/\w+;base64,/, '') : "";
   const totalKeys = keys.length;
   let lastError: any = null;
+
+  // إعداد أجزاء المحتوى (نص فقط أو نص مع صورة)
+  const contentParts: any[] = [{ text: prompt }];
+  if (base64Data && base64Data.length > 50) {
+    contentParts.push({ inline_data: { mime_type: "image/jpeg", data: base64Data } });
+  }
 
   // Try active models in order of priority
   for (const modelName of ACTIVE_MODELS) {
@@ -62,10 +68,7 @@ export async function analyzeWithGeminiPool(
           },
           body: JSON.stringify({
             contents: [{
-              parts: [
-                { text: prompt },
-                { inline_data: { mime_type: "image/jpeg", data: base64Data } }
-              ]
+              parts: contentParts
             }],
             generationConfig: {
               temperature: 0.05,

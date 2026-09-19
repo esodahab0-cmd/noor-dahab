@@ -122,6 +122,16 @@ ${facesContext}`;
 2. لو مكتوب تم الدفع بنجاح أو العملية مقبولة/مرفوضة اذكرها فوراً في كلمة واحدة.
 3. ممنوع أي رغي أو تفاصيل أخرى. سلامة فلوس الكفيف هي الأولوية القصوى.`;
 
+    case "chat":
+      return `أنت "نور دهب"، المساعد الشخصي الذكي والرفيق الودود لإنسان كفيف في مصر.
+سألك الكفيف السؤال التالي أو يتحدث معك:
+"${userQuestion || "أهلاً بك يا نور دهب"}"
+المطلوب منك:
+1. أجب عن سؤاله بالظبط وبأسلوب علمي ومبسط وسهل الفهم بالعامية المصرية الهادية والودودة في جملتين أو ثلاث جمل بالكتير.
+2. لو كان سؤالاً عن التطبيق أو طريقة استخدامه، وضح له الأوامر الصوتية أو الميزات ببساطة.
+3. لو كان سؤالاً علمياً أو ثقافياً أو عاماً، أجب بدقة وأمانة وموضوعية.
+4. ممنوع أي رغي أو تطويل، وممنوع الكلمات الإنجليزية والرموز والماركداون، لأن كلامك سيُنطق للكفيف صوتياً مباشرة.`;
+
     default:
       return `${basePrompt}
 المطلوب العام: صف اللي شايفه قدام الكاميرا بأسلوب مصري بسيط ومباشر ودقيق في جملتين أو تلاتة، بدون رغي أو مبالغة أو تخريف، واذكر أهم الحاجات قدام الكفيف ومكانها واتجاهها وبعدها عنه بالظبط.`;
@@ -133,9 +143,10 @@ export async function processVisionWithFallback(
   keys: AIKeysConfig
 ): Promise<AIAnalysisResponse> {
   const mode = req.mode || "general";
+  const imageBase64 = req.imageBase64 || "";
 
   // ── Step 0: Fast Perceptual Vision Cache (< 40ms) ───────────
-  const cacheHit = lookupVisionCache(req.imageBase64, mode, req.userQuestion);
+  const cacheHit = lookupVisionCache(imageBase64, mode, req.userQuestion);
   if (cacheHit.hit && cacheHit.text) {
     return {
       success: true,
@@ -154,10 +165,10 @@ export async function processVisionWithFallback(
     try {
       attempted.push("Gemini Key Pool (Tier 1)");
       const customKeys = keys.geminiKey ? [keys.geminiKey] : undefined;
-      const result = await analyzeWithGeminiPool(req.imageBase64, prompt, customKeys);
+      const result = await analyzeWithGeminiPool(imageBase64, prompt, customKeys);
       
       recordProviderSuccess("gemini");
-      saveVisionCache(req.imageBase64, mode, result.text, "gemini", req.userQuestion);
+      saveVisionCache(imageBase64, mode, result.text, "gemini", req.userQuestion);
 
       return {
         success: true,
@@ -179,10 +190,10 @@ export async function processVisionWithFallback(
   if (groqKey && canExecuteProvider("groq")) {
     try {
       attempted.push("Groq Vision (Tier 2)");
-      const r = await analyzeWithGroq(req.imageBase64, prompt, groqKey);
+      const r = await analyzeWithGroq(imageBase64, prompt, groqKey);
       
       recordProviderSuccess("groq");
-      saveVisionCache(req.imageBase64, mode, r.text, "groq", req.userQuestion);
+      saveVisionCache(imageBase64, mode, r.text, "groq", req.userQuestion);
 
       return {
         success: true,
@@ -206,10 +217,10 @@ export async function processVisionWithFallback(
     try {
       attempted.push("Cloudflare Pool (Tier 3)");
       const customTokens = keys.cloudflareApiToken ? [keys.cloudflareApiToken] : undefined;
-      const r = await analyzeWithCloudflarePool(req.imageBase64, prompt, cfAccount, customTokens);
+      const r = await analyzeWithCloudflarePool(imageBase64, prompt, cfAccount, customTokens);
       
       recordProviderSuccess("cloudflare");
-      saveVisionCache(req.imageBase64, mode, r.text, "cloudflare", req.userQuestion);
+      saveVisionCache(imageBase64, mode, r.text, "cloudflare", req.userQuestion);
 
       return {
         success: true,
@@ -232,10 +243,10 @@ export async function processVisionWithFallback(
   if (hfKey && canExecuteProvider("huggingface")) {
     try {
       attempted.push("Hugging Face (Tier 4)");
-      const r = await analyzeWithHuggingFace(req.imageBase64, prompt, hfKey);
+      const r = await analyzeWithHuggingFace(imageBase64, prompt, hfKey);
       
       recordProviderSuccess("huggingface");
-      saveVisionCache(req.imageBase64, mode, r.text, "huggingface", req.userQuestion);
+      saveVisionCache(imageBase64, mode, r.text, "huggingface", req.userQuestion);
 
       return {
         success: true,
