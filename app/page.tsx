@@ -35,6 +35,7 @@ import { reportCrowdHazard, checkProactiveNearbyHazards } from "@/lib/geo/crowdH
 import { recordDailyActivity, generateDailyImpactSpokenReport } from "@/lib/utils/dailyImpactTracker";
 import { shouldSendFrameToAI } from "@/lib/utils/frameDeltaOptimizer";
 import { evaluateProactiveContext } from "@/lib/ai/contextAwareness";
+import { initAutoUpdateWatcher } from "@/lib/utils/appUpdater";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -492,11 +493,15 @@ export default function BlindHomePage() {
       preWarmLocalModel();
     }, 6000);
 
+    // Watch for new Service Worker updates and auto-apply with voice announcement
+    initAutoUpdateWatcher(speak);
+
     return () => {
+      clearTimeout(timer);
       streamRef.current?.getTracks().forEach(t => t.stop());
       clearInterval(autoScanTimerRef.current);
     };
-  }, [router]);
+  }, [router, speak]);
 
   // ── Active Guest Presence Heartbeat Ping (كل 25 ثانية) ───────
   useEffect(() => {
