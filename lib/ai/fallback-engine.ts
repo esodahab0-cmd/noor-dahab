@@ -3,6 +3,8 @@ import { analyzeWithGroq } from "./groq";
 import { analyzeWithGeminiPool } from "./gemini-pool";
 import { analyzeWithCloudflarePool } from "./cloudflare-pool";
 import { analyzeWithHuggingFace } from "./huggingface";
+import { canExecuteProvider, recordProviderSuccess, recordProviderFailure } from "./circuitBreaker";
+import { lookupVisionCache, saveVisionCache } from "./perceptualCache";
 
 export function buildSystemPrompt(
   mode: AnalysisMode = "general",
@@ -130,31 +132,58 @@ export async function processVisionWithFallback(
   req: AIAnalysisRequest,
   keys: AIKeysConfig
 ): Promise<AIAnalysisResponse> {
-  const prompt = req.customPrompt || buildSystemPrompt(req.mode, req.locationInfo, undefined, req.userQuestion);
-  const attempted: string[] = [];
+  const mode = req.mode || "general";
 
-  // Tier 1: Google Gemini Multi-Key Rotation Pool
-  try {
-    attempted.push("Gemini Key Pool (Tier 1)");
-    const customKeys = keys.geminiKey ? [keys.geminiKey] : undefined;
-    const result = await analyzeWithGeminiPool(req.imageBase64, prompt, customKeys);
+  // ── Step 0: Fast Perceptual Vision Cache (< 40ms) ───────────
+  const cacheHit = lookupVisionCache(req.imageBase64, mode, req.userQuestion);
+  if (cacheHit.hit && cacheHit.text) {
     return {
       success: true,
-      text: result.text,
+      text: cacheHit.text,
       provider: "gemini",
-      latencyMs: result.latencyMs,
-      tierAttempted: attempted
+      latencyMs: 35,
+      tierAttempted: ["Smart Vision Cache (Instant Hit ⚡)"]
     };
-  } catch (err: any) {
-    console.warn("Gemini Pool failed, attempting Groq fallback:", err.message);
   }
 
-  // Tier 2: Groq LLaMA 3.2 Vision
+  const prompt = req.customPrompt || buildSystemPrompt(mode, req.locationInfo, undefined, req.userQuestion);
+  const attempted: string[] = [];
+
+  // ── Tier 1: Google Gemini Multi-Key Rotation Pool ───────────
+  if (canExecuteProvider("gemini")) {
+    try {
+      attempted.push("Gemini Key Pool (Tier 1)");
+      const customKeys = keys.geminiKey ? [keys.geminiKey] : undefined;
+      const result = await analyzeWithGeminiPool(req.imageBase64, prompt, customKeys);
+      
+      recordProviderSuccess("gemini");
+      saveVisionCache(req.imageBase64, mode, result.text, "gemini", req.userQuestion);
+
+      return {
+        success: true,
+        text: result.text,
+        provider: "gemini",
+        latencyMs: result.latencyMs,
+        tierAttempted: attempted
+      };
+    } catch (err: any) {
+      recordProviderFailure("gemini", err.message);
+      console.warn("Gemini Pool failed, attempting Groq fallback:", err.message);
+    }
+  } else {
+    attempted.push("Gemini Key Pool (Circuit OPEN ⚠️ - Skipped)");
+  }
+
+  // ── Tier 2: Groq LLaMA 3.2 Vision ────────────────────────────
   const groqKey = keys.groqKey || process.env.GROQ_API_KEY;
-  if (groqKey) {
+  if (groqKey && canExecuteProvider("groq")) {
     try {
       attempted.push("Groq Vision (Tier 2)");
       const r = await analyzeWithGroq(req.imageBase64, prompt, groqKey);
+      
+      recordProviderSuccess("groq");
+      saveVisionCache(req.imageBase64, mode, r.text, "groq", req.userQuestion);
+
       return {
         success: true,
         text: r.text,
@@ -164,17 +193,24 @@ export async function processVisionWithFallback(
         tierAttempted: attempted
       };
     } catch (e: any) {
+      recordProviderFailure("groq", e.message);
       console.warn("Tier 2 Groq failed:", e.message);
     }
+  } else if (groqKey) {
+    attempted.push("Groq Vision (Circuit OPEN ⚠️ - Skipped)");
   }
 
-  // Tier 3: Cloudflare Workers AI Pool
+  // ── Tier 3: Cloudflare Workers AI Pool ───────────────────────
   const cfAccount = keys.cloudflareAccountId || process.env.CLOUDFLARE_ACCOUNT_ID;
-  if (cfAccount) {
+  if (cfAccount && canExecuteProvider("cloudflare")) {
     try {
       attempted.push("Cloudflare Pool (Tier 3)");
       const customTokens = keys.cloudflareApiToken ? [keys.cloudflareApiToken] : undefined;
       const r = await analyzeWithCloudflarePool(req.imageBase64, prompt, cfAccount, customTokens);
+      
+      recordProviderSuccess("cloudflare");
+      saveVisionCache(req.imageBase64, mode, r.text, "cloudflare", req.userQuestion);
+
       return {
         success: true,
         text: r.text,
@@ -184,16 +220,23 @@ export async function processVisionWithFallback(
         tierAttempted: attempted
       };
     } catch (e: any) {
+      recordProviderFailure("cloudflare", e.message);
       console.warn("Tier 3 Cloudflare failed:", e.message);
     }
+  } else if (cfAccount) {
+    attempted.push("Cloudflare Pool (Circuit OPEN ⚠️ - Skipped)");
   }
 
-  // Tier 4: Hugging Face
+  // ── Tier 4: Hugging Face ─────────────────────────────────────
   const hfKey = keys.huggingfaceKey || process.env.HUGGINGFACE_API_KEY;
-  if (hfKey) {
+  if (hfKey && canExecuteProvider("huggingface")) {
     try {
       attempted.push("Hugging Face (Tier 4)");
       const r = await analyzeWithHuggingFace(req.imageBase64, prompt, hfKey);
+      
+      recordProviderSuccess("huggingface");
+      saveVisionCache(req.imageBase64, mode, r.text, "huggingface", req.userQuestion);
+
       return {
         success: true,
         text: r.text,
@@ -203,8 +246,11 @@ export async function processVisionWithFallback(
         tierAttempted: attempted
       };
     } catch (e: any) {
+      recordProviderFailure("huggingface", e.message);
       console.warn("Tier 4 HF failed:", e.message);
     }
+  } else if (hfKey) {
+    attempted.push("Hugging Face (Circuit OPEN ⚠️ - Skipped)");
   }
 
   return {

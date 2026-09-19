@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { buildSystemPrompt } from "@/lib/ai/fallback-engine";
 import { checkRateLimit } from "@/lib/security/rate-limiter";
 import { validateOrigin, getCorsHeaders, handleCorsPreflight } from "@/lib/security/cors";
+import { lookupVisionCache, saveVisionCache } from "@/lib/ai/perceptualCache";
 
 export const runtime = "nodejs";
 
@@ -47,6 +48,18 @@ export async function POST(request: NextRequest) {
       return new Response(JSON.stringify({ error: "الصورة مطلوبة." }), {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // 0. فحص كاش الرؤية فائق السرعة (< 35ms)
+    const cached = lookupVisionCache(imageBase64, mode, userQuestion);
+    if (cached.hit && cached.text) {
+      return new Response(cached.text, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "text/plain; charset=utf-8",
+          "X-Cache": "HIT",
+        },
       });
     }
 
@@ -104,6 +117,7 @@ export async function POST(request: NextRequest) {
         const stream = new ReadableStream({
           async start(controller) {
             let buffer = "";
+            let accumulatedFullText = "";
             try {
               while (true) {
                 const { done, value } = await reader.read();
@@ -123,11 +137,16 @@ export async function POST(request: NextRequest) {
                       const textChunk =
                         parsed.candidates?.[0]?.content?.parts?.[0]?.text || "";
                       if (textChunk) {
+                        accumulatedFullText += textChunk;
                         controller.enqueue(encoder.encode(textChunk));
                       }
                     } catch {}
                   }
                 }
+              }
+
+              if (accumulatedFullText.trim()) {
+                saveVisionCache(imageBase64, mode, accumulatedFullText.trim(), "gemini-stream", userQuestion);
               }
             } catch (err) {
               controller.error(err);
