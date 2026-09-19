@@ -16,8 +16,8 @@ export function GuestAccountRequestModal({
 }: GuestAccountRequestModalProps) {
   if (!isOpen) return null;
 
-  const adminPhone = "01091560982"; // رقم مهندس إسلام للتواصل
-  const cleanPhone = "201091560982";
+  const adminPhone = "01064147224"; // رقم المهندس إسلام أبو دهب
+  const cleanPhone = "201064147224";
   const whatsappMsg = encodeURIComponent(
     "السلام عليكم يا بشمهندس إسلام، أنا أستخدم تطبيق نور دهب كزائر وأرغب في إنشاء حساب رسمي ومفعل لي ولعائلتي."
   );
