@@ -59,12 +59,28 @@ export function calculateFrameDeltaPercentage(video: HTMLVideoElement): number {
   }
 }
 
+let lastSentTimestamp = 0;
+const MAX_STALENESS_MS = 14000; // تحديث إجباري كل 14 ثانية على الأكثر حتى لو كان المشهد ثابتاً
+
 /**
  * فحص ما إذا كان الكادر يستحق الإرسال للـ AI
  * @param threshold الحد الأدنى للتغير (الافتراضي 12%)
  */
 export function shouldSendFrameToAI(video: HTMLVideoElement, threshold: number = 12): boolean {
+  const now = Date.now();
+
+  // إذا مرت 14 ثانية دون تحديث، نرسل الإطار للاطمئنان والتحديث
+  if (now - lastSentTimestamp > MAX_STALENESS_MS) {
+    lastSentTimestamp = now;
+    calculateFrameDeltaPercentage(video);
+    return true;
+  }
+
   const delta = calculateFrameDeltaPercentage(video);
-  // إذا كان التغير أعلى من العتبة نرسله، وإلا فهو مشهد ثابت مكرر
-  return delta >= threshold;
+  if (delta >= threshold) {
+    lastSentTimestamp = now;
+    return true;
+  }
+
+  return false;
 }

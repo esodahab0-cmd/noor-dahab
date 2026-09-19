@@ -5,7 +5,7 @@
  * يتيح للمكفوفين تسجيل وتنبيه بعضهم البعض استباقياً بالحفر والعوائق الخطيرة في الشوارع.
  */
 
-import { collection, addDoc, getDocs, query, where } from "firebase/firestore";
+import { collection, addDoc, getDocs, query, limit } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
 export interface CrowdsourcedHazard {
@@ -73,9 +73,10 @@ export async function checkProactiveNearbyHazards(
   if (!userLat || !userLon) return { hasHazard: false };
 
   try {
-    // تحديث الكاش كل 5 دقائق
+    // تحديث الكاش كل 5 دقائق (أحدث 100 خطر لحماية الذاكرة وسرعة البحث)
     if (Date.now() - lastFetchTime > 300000 || localHazardsCache.length === 0) {
-      const snap = await getDocs(collection(db, "crowd_hazards"));
+      const q = query(collection(db, "crowd_hazards"), limit(100));
+      const snap = await getDocs(q);
       localHazardsCache = snap.docs.map((d) => ({
         id: d.id,
         ...(d.data() as any),

@@ -71,6 +71,14 @@ export function checkRateLimit(
   const now = Date.now();
   const windowStart = now - windowMs;
 
+  // حماية فورية ضد تضخم الذاكرة أثناء الهجمات والضغط العالي
+  if (rateLimitStore.size > 3000) {
+    rateLimitStore.forEach((rec, key) => {
+      rec.timestamps = rec.timestamps.filter((t: number) => t > windowStart);
+      if (rec.timestamps.length === 0) rateLimitStore.delete(key);
+    });
+  }
+
   let record = rateLimitStore.get(ip);
   if (!record) {
     record = { timestamps: [] };
