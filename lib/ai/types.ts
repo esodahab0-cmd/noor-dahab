@@ -13,7 +13,8 @@ export type AnalysisMode =
   | "appliance"
   | "transit"
   | "barcode"
-  | "companion";
+  | "companion"
+  | "followup";
 
 export interface AIAnalysisRequest {
   imageBase64: string;

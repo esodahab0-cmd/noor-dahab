@@ -8,7 +8,7 @@ import {
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
   Camera, ShieldCheck, UserPlus, Save, Zap,
   Shirt, Search, Monitor, Bus, QrCode, RotateCcw,
-  Moon, Gauge, WifiOff, Compass, Train, Cpu
+  Moon, Gauge, WifiOff, Compass, Train, Cpu, Sun
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
@@ -24,6 +24,7 @@ import { scanBarcodeLocally } from "@/lib/utils/barcode";
 import { detectObjectsLocally, preWarmLocalModel } from "@/lib/ai/local-object-detector";
 import { findNearestMetroStation, NearestMetroResult } from "@/lib/utils/metro-navigator";
 import { getGuestTrialStatus, consumeGuestTrialAttempt, GUEST_EXHAUSTED_MESSAGE } from "@/lib/utils/guest-trial";
+import { startLightMeter, stopLightMeter, isLightMeterActive, getLightDescription } from "@/lib/utils/light-meter";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -82,6 +83,12 @@ export default function BlindHomePage() {
   // Description Session History (Last 10 descriptions)
   const [descriptionHistory, setDescriptionHistory] = useState<string[]>([]);
   const historyIndexRef = useRef<number>(-1);
+
+  // Visual Follow-up (Be My AI style) & Acoustic Light Meter (Seeing AI style)
+  const lastCapturedBase64Ref = useRef<string | null>(null);
+  const lastCapturedTimeRef = useRef<number>(0);
+  const [isLightMeterOn, setIsLightMeterOn] = useState(false);
+  const [currentLightDesc, setCurrentLightDesc] = useState<string>("");
 
   // Hardware Sensors Hook
   const {
@@ -594,16 +601,59 @@ export default function BlindHomePage() {
     }
   }, [cameraReady, triggerHaptic, playChime, speak]);
 
-  // ── Analyze Vision (All 11 Modes) ────────────────────────────
+  // ── Acoustic Light Meter Toggle (Seeing AI style) ────────────
+  const toggleLightMeter = useCallback(() => {
+    unlockSpeaker();
+    if (!videoRef.current || permState !== "granted") {
+      speak("شغل الكاميرا الأول بالضغط على زر البدء عشان أفحص الإضاءة.");
+      return;
+    }
+
+    if (isLightMeterActive()) {
+      stopLightMeter();
+      setIsLightMeterOn(false);
+      setCurrentLightDesc("");
+      triggerHaptic("medium");
+      speak("تم إيقاف كاشف النور.");
+    } else {
+      stopSpeaking();
+      triggerHaptic("success");
+      const started = startLightMeter(videoRef.current, (lum, desc) => {
+        setCurrentLightDesc(desc);
+      });
+      if (started) {
+        setIsLightMeterOn(true);
+        speak("تم تشغيل كاشف النور بالرنين الصوتي. كل ما النغمة تعلى يعني النور أقوى، ولما تسكت يعني ظلام.");
+      } else {
+        speak("تعذر تشغيل كاشف النور في متصفحك.");
+      }
+    }
+  }, [permState, speak, stopSpeaking, triggerHaptic, unlockSpeaker]);
+
+  // Clean up light meter on unmount
+  useEffect(() => {
+    return () => {
+      stopLightMeter();
+    };
+  }, []);
+
+  // ── Analyze Vision (All 12 Modes + Follow-up) ────────────────
   const handleAnalyze = async (
     mode: AnalysisMode = "general",
     silentPrompt = false,
-    userQuestion?: string
+    userQuestion?: string,
+    useCachedImage = false
   ) => {
     if (analyzing) return;
-    if (!cameraReady) {
+    if (!cameraReady && !(useCachedImage && lastCapturedBase64Ref.current)) {
       speak("يرجى تشغيل الكاميرا أولاً.");
       return;
+    }
+
+    if (isLightMeterActive()) {
+      stopLightMeter();
+      setIsLightMeterOn(false);
+      setCurrentLightDesc("");
     }
 
     setActiveMode(mode);
@@ -613,7 +663,7 @@ export default function BlindHomePage() {
     stopSpeaking();
 
     // If offline and not using local barcode scanner, run On-Device Local AI!
-    if (typeof navigator !== "undefined" && !navigator.onLine && mode !== "barcode") {
+    if (typeof navigator !== "undefined" && !navigator.onLine && mode !== "barcode" && !useCachedImage) {
       speak("انقطع الإنترنت. جاري الفحص بالذكاء الاصطناعي المحلي فائق السرعة...");
       await triggerLocalObjectDetection();
       setAnalyzing(false);
@@ -635,42 +685,54 @@ export default function BlindHomePage() {
         transit: "بقرالك يافطة العربية أو الأتوبيس...",
         barcode: "بقرالك بيانات المنتج والباركود...",
         companion: "ماشي معاك ومرافقك في الطريق...",
+        followup: "بجاوبك على استفسارك من نفس الصورة...",
       };
       speak(labels[mode] || "بفحص الصورة...");
+    } else if (useCachedImage && userQuestion) {
+      speak("ثواني، بجاوبك من واقع الصورة اللي صورتها...");
     }
 
     try {
-      if (!videoRef.current) throw new Error("الكاميرا غير جاهزة");
+      let base64 = "";
 
-      // Fast Local Barcode / QR Code Scanner (zero AI cost, instant response)
-      if (mode === "barcode") {
-        try {
-          const detectedCode = await scanBarcodeLocally(videoRef.current);
-          if (detectedCode) {
-            triggerHaptic("success");
-            playChime(523.25, 0.1);
-            const isUrl = detectedCode.startsWith("http://") || detectedCode.startsWith("https://");
-            const resultMsg = isUrl
-              ? `تم قراءة رمز الاستجابة السريعة: رابط إلكتروني إلى: ${detectedCode}`
-              : `تم قراءة الكود بنجاح: ${detectedCode}`;
-            lastDescriptionRef.current = resultMsg;
-            setCurrentResult(resultMsg);
-            speak(resultMsg);
-            setAnalyzing(false);
-            return;
+      if (useCachedImage && lastCapturedBase64Ref.current) {
+        base64 = lastCapturedBase64Ref.current;
+      } else {
+        if (!videoRef.current) throw new Error("الكاميرا غير جاهزة");
+
+        // Fast Local Barcode / QR Code Scanner (zero AI cost, instant response)
+        if (mode === "barcode") {
+          try {
+            const detectedCode = await scanBarcodeLocally(videoRef.current);
+            if (detectedCode) {
+              triggerHaptic("success");
+              playChime(523.25, 0.1);
+              const isUrl = detectedCode.startsWith("http://") || detectedCode.startsWith("https://");
+              const resultMsg = isUrl
+                ? `تم قراءة رمز الاستجابة السريعة: رابط إلكتروني إلى: ${detectedCode}`
+                : `تم قراءة الكود بنجاح: ${detectedCode}`;
+              lastDescriptionRef.current = resultMsg;
+              setCurrentResult(resultMsg);
+              speak(resultMsg);
+              setAnalyzing(false);
+              return;
+            }
+          } catch (e) {
+            console.warn("Local barcode scanner skipped, falling back to AI:", e);
           }
-        } catch (e) {
-          console.warn("Local barcode scanner skipped, falling back to AI:", e);
         }
-      }
 
-      // High-resolution adaptive capture (1024px for reading/currency/barcode/meds or custom question, 720px for general)
-      const captureWidth = ["read_text", "currency", "medication", "barcode", "appliance"].includes(mode) || !!userQuestion ? 1024 : 720;
-      const { base64, isDark } = await compressImage(videoRef.current, captureWidth, 0.82);
+        // High-resolution adaptive capture (1024px for reading/currency/barcode/meds or custom question, 720px for general)
+        const captureWidth = ["read_text", "currency", "medication", "barcode", "appliance"].includes(mode) || !!userQuestion ? 1024 : 720;
+        const compressed = await compressImage(videoRef.current, captureWidth, 0.82);
+        base64 = compressed.base64;
+        lastCapturedBase64Ref.current = base64;
+        lastCapturedTimeRef.current = Date.now();
 
-      // Auto-Torch if environment is dark
-      if (isDark && !torchOn) {
-        setTorch(true, false);
+        // Auto-Torch if environment is dark
+        if (compressed.isDark && !torchOn) {
+          setTorch(true, false);
+        }
       }
 
       // Guest Trial Check: Limit unauthenticated visitors to 5 cloud AI analyses daily
@@ -846,14 +908,20 @@ export default function BlindHomePage() {
       }
 
       // 3. Torch controls
-      if (/كشاف|فلاش|نور|شغل الكشاف|شغل الفلاش/.test(lower) && !/اطفي|إطفاء|اقفل/.test(lower)) {
+      if (/كشاف|فلاش|شغل الكشاف|شغل الفلاش/.test(lower) && !/اطفي|إطفاء|اقفل/.test(lower)) {
         setTorch(true);
         speak("شغلتلك الكشاف.");
         return;
       }
-      if (/اطفي الكشاف|اقفل الكشاف|اطفي الفلاش|إطفاء النور/.test(lower)) {
+      if (/اطفي الكشاف|اقفل الكشاف|اطفي الفلاش/.test(lower)) {
         setTorch(false);
         speak("طفيتلك الكشاف.");
+        return;
+      }
+
+      // 3.1 Acoustic Light Meter (كاشف النور والإضاءة بالرنين الصوتي)
+      if (/حساس النور|كاشف النور|النور قايد|النور مطفي|النور شغال|افحص النور|شدة الإضاءة|اللمبة قايدة|اللمبة مطفية|فحص الضوء|حساس الضوء|كاشف الإضاءة/.test(lower)) {
+        toggleLightMeter();
         return;
       }
 
@@ -992,6 +1060,15 @@ export default function BlindHomePage() {
       if (/عائق|طريق|قدامي|مسافة|سلم|حفرة|رصيف|خطر/.test(lower)) {
         speak(`سمعتك. ثواني برصدلك الطريق والعوائق...`);
         handleAnalyze("obstacle", true, cleanTranscript);
+        return;
+      }
+
+      // 16.5 Visual Follow-up Chat (Be My AI style - استفسار عن نفس الصورة السابقة)
+      const hasRecentImage = !!lastCapturedBase64Ref.current && (Date.now() - lastCapturedTimeRef.current < 300000);
+      const isFollowUpIntent = /طب فيه|طب ايه|طب إيه|طب هو|طب هي|طب لونه|طب لونها|كرسي فاضي|اقرا السعر|السعر كام|تاريخ الصلاحية|مكتوب ايه|مين ده|مين اللي واقف|اسأل عن الصورة|في الصورة دي|الصورة دي فيها ايه|تفاصيل اكتر|وضح اكتر|شايف ايه في الصورة/.test(lower);
+
+      if (hasRecentImage && isFollowUpIntent) {
+        handleAnalyze("followup", false, cleanTranscript, true);
         return;
       }
 
@@ -1158,6 +1235,23 @@ export default function BlindHomePage() {
             </button>
           )}
 
+          {/* Acoustic Light Meter (Seeing AI style - كاشف النور بالرنين الصوتي) */}
+          {permState === "granted" && (
+            <button
+              onClick={toggleLightMeter}
+              className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all active:scale-95 ${
+                isLightMeterOn
+                  ? "bg-amber-500 text-dark-900 border-amber-300 font-black shadow-lg shadow-amber-400/40 animate-pulse"
+                  : "bg-dark-800 text-amber-300 border-gray-700 hover:border-amber-400"
+              }`}
+              title="كاشف النور والإضاءة بالرنين الصوتي"
+              aria-label={isLightMeterOn ? "كاشف النور شغّال، اضغط للإيقاف" : "كاشف النور والإضاءة"}
+            >
+              <Sun className={`w-3.5 h-3.5 ${isLightMeterOn ? "animate-spin text-dark-900" : "text-amber-400"}`} />
+              <span className="text-[10px]">{isLightMeterOn ? "النور ⚡" : "كاشف النور"}</span>
+            </button>
+          )}
+
           {/* Auto Scan Toggle */}
           <button
             onClick={() => setAutoScanEnabled(!autoScanEnabled)}
@@ -1263,7 +1357,13 @@ export default function BlindHomePage() {
           </div>
 
           <p className="text-lg font-black text-white max-w-sm leading-relaxed px-4 py-2 bg-black/85 rounded-2xl border border-gold-500/30 text-center shadow-lg">
-            {analyzing ? "جارٍ التحليل السريع..." : isListening ? "أسمعك الآن، تفضل بالتحدث..." : currentResult}
+            {isLightMeterOn
+              ? `💡 كاشف النور: ${currentLightDesc || "يصدر رنيناً صوتياً حسب شدة الضوء"}`
+              : analyzing
+              ? "جارٍ التحليل السريع..."
+              : isListening
+              ? "أسمعك الآن، تفضل بالتحدث..."
+              : currentResult}
           </p>
 
           <span className="mt-2 text-[11px] font-bold text-gold-300/90 bg-black/70 px-3 py-1 rounded-full border border-white/10">
