@@ -29,6 +29,7 @@ import { analyzeDocumentFraming, resetDocumentGuidanceCounter } from "@/lib/util
 import { playSpatialHazardBeep } from "@/lib/utils/spatial-audio";
 import { detectCurrencyOffline } from "@/lib/utils/offline-currency";
 import { optimizeImageForTask } from "@/lib/utils/smartImageOptimizer";
+import { findMatchingMedicationTag, getAllMedicationTags, MedicationAudioTag } from "@/lib/utils/medication-audio-locker";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -769,10 +770,19 @@ export default function BlindHomePage() {
             if (detectedCode) {
               triggerHaptic("success");
               playChime(523.25, 0.1);
-              const isUrl = detectedCode.startsWith("http://") || detectedCode.startsWith("https://");
-              const resultMsg = isUrl
-                ? `تم قراءة رمز الاستجابة السريعة: رابط إلكتروني إلى: ${detectedCode}`
-                : `تم قراءة الكود بنجاح: ${detectedCode}`;
+
+              // فحص ما إذا كان هناك وسم صوتي مخصص مسجل من الكفيف لهذا المنتج
+              const savedTag = findMatchingMedicationTag(detectedCode);
+              let resultMsg = "";
+              if (savedTag) {
+                resultMsg = `منتج مسجل في خزانتك: ${savedTag.title}. ${savedTag.voiceNote ? `ملاحظتك: ${savedTag.voiceNote}` : ""}`;
+              } else {
+                const isUrl = detectedCode.startsWith("http://") || detectedCode.startsWith("https://");
+                resultMsg = isUrl
+                  ? `تم قراءة رمز الاستجابة السريعة: رابط إلكتروني إلى: ${detectedCode}`
+                  : `تم قراءة الكود بنجاح: ${detectedCode}`;
+              }
+
               lastDescriptionRef.current = resultMsg;
               setCurrentResult(resultMsg);
               speak(resultMsg);
@@ -937,18 +947,27 @@ export default function BlindHomePage() {
     return () => clearInterval(autoScanTimerRef.current);
   }, [autoScanEnabled, cameraReady, activeMode]);
 
-  // ── Walking Companion Co-Pilot Continuous Loop ───────────────
+  // ── Walking Companion Co-Pilot Continuous Loop (Upgraded Zero-Latency) ─────────
+  const lastCompanionTextRef = useRef<string>("");
+
   useEffect(() => {
     if (companionMode && cameraReady) {
       companionTimerRef.current = setInterval(() => {
         if (!videoRef.current || analyzing || isListening || isSpeaking) return;
+
+        // مرونة الشبكة: إذا كان النت مقطوعاً نشغل الرادار المحلي فوراً
+        if (typeof navigator !== "undefined" && !navigator.onLine) {
+          triggerLocalObjectDetection();
+          return;
+        }
+
         handleAnalyze("companion", true);
-      }, 4800);
+      }, 3200);
     } else {
       clearInterval(companionTimerRef.current);
     }
     return () => clearInterval(companionTimerRef.current);
-  }, [companionMode, cameraReady, analyzing, isListening, isSpeaking]);
+  }, [companionMode, cameraReady, analyzing, isListening, isSpeaking, triggerLocalObjectDetection]);
 
   // ── Full-Screen Long Press & Tap Handlers ───────────────────
   // Phase 5.1: Two-finger quick double-tap = Stop Speaking (TalkBack/VoiceOver style)
@@ -1057,6 +1076,26 @@ export default function BlindHomePage() {
         return;
       }
 
+      // 3.2 Blackout AMOLED Battery Saver (وضع التوفير المظلم والخصوصية)
+      if (/شغل التوفير|طفي الشاشة|الستار المظلم|توفير البطارية|شاشة سودا|شاشة سوداء|سواد الشاشة|طفي النور بتاع الشاشة/.test(lower)) {
+        if (!isBlackoutMode) {
+          toggleBlackoutMode();
+          speak("شغلتلك وضع التوفير المظلم. الشاشة مطفية تماماً لتوفير البطارية وحفظ خصوصيتك، والكاميرا والمايك شغالين. المس الشاشة في أي مكان لو عايز تفتحها.");
+        } else {
+          speak("وضع التوفير المظلم شغال بالفعل.");
+        }
+        return;
+      }
+      if (/افتح الشاشة|نور الشاشة|إلغاء التوفير|الغي التوفير|شغل الشاشة|اطفي الستار|إلغاء الشاشة السوداء/.test(lower)) {
+        if (isBlackoutMode) {
+          toggleBlackoutMode();
+          speak("نورتلك الشاشة ورجعت الواجهة كاملة.");
+        } else {
+          speak("الشاشة مفتوحة وشغالة بالفعل.");
+        }
+        return;
+      }
+
       // 4. Location & Street Voice Command (GPS Reverse Geocoding)
       if (/موقع|أين أنا|مكاني|شارع|عنوان|أنا فين|فين أنا|احنا فين|الشارع ده ايه|اسم الشارع|مكاننا فين|مكاني فين|احنا فين دلوقتي|انا في شارع ايه|اسم المكان/.test(lower)) {
         announceCurrentLocation();
@@ -1103,13 +1142,15 @@ export default function BlindHomePage() {
         return;
       }
 
-      // 4.7 Session History Navigation (السابق / اللي قبله / اللي بعده)
-      if (/اللي قبله|الوصف السابق|السابق|قبل كده|ارجع للوصف|قبله/.test(lower)) {
-        handleHistoryPrevious();
-        return;
-      }
-      if (/اللي بعده|الوصف التالي|التالي|بعد كده|قدم|بعده/.test(lower)) {
-        handleHistoryNext();
+      // 4.8 Medication Audio Locker (خزانة الأدوية والوسوم الصوتية)
+      if (/خزانة الأدوية|أدويتي|الادوية المسجلة|عايز اسجل دوا|سجل دوا|وسم صوتي|احفظ الدوا|أدوية مسجلة/.test(lower)) {
+        const allTags = getAllMedicationTags();
+        if (allTags.length === 0) {
+          speak("خزانة الأدوية فاضية حالياً. لما تفحص أي دوا بالباركود تقدر تحفظ ملاحظتك الصوتية عليه.");
+        } else {
+          const names = allTags.slice(0, 5).map((t: MedicationAudioTag) => t.title).join("، و");
+          speak(`عندك ${allTags.length} أدوية مسجلة في خزانتك، منها: ${names}.`);
+        }
         return;
       }
 
