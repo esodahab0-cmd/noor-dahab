@@ -28,6 +28,7 @@ import { startLightMeter, stopLightMeter, isLightMeterActive, getLightDescriptio
 import { analyzeDocumentFraming, resetDocumentGuidanceCounter } from "@/lib/utils/document-detector";
 import { playSpatialHazardBeep } from "@/lib/utils/spatial-audio";
 import { detectCurrencyOffline } from "@/lib/utils/offline-currency";
+import { optimizeImageForTask } from "@/lib/utils/smartImageOptimizer";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -783,17 +784,22 @@ export default function BlindHomePage() {
           }
         }
 
-        // High-resolution adaptive capture (1024px for reading/currency/barcode/meds or custom question, 720px for general)
-        const captureWidth = ["read_text", "currency", "medication", "barcode", "appliance"].includes(mode) || !!userQuestion ? 1024 : 720;
-        const compressed = await compressImage(videoRef.current, captureWidth, 0.82);
-        base64 = compressed.base64;
+        // High-performance Adaptive Image Optimization & Blur Detection
+        const optimized = optimizeImageForTask(videoRef.current, mode, true);
+        if (!optimized) throw new Error("الكاميرا غير جاهزة");
+
+        // تنبيه الكفيف صوتياً إذا كانت الصورة مهزوزة في الأنماط الحساسة (قراءة / مستندات)
+        if (optimized.isBlurred && (mode === "read_text" || mode === "currency" || mode === "medication")) {
+          triggerHaptic("medium");
+          playChime(440, 0.15);
+          speak("يرجى تثبيت الكاميرا، الصورة مهزوزة شوية.");
+          setAnalyzing(false);
+          return;
+        }
+
+        base64 = optimized.base64;
         lastCapturedBase64Ref.current = base64;
         lastCapturedTimeRef.current = Date.now();
-
-        // Auto-Torch if environment is dark
-        if (compressed.isDark && !torchOn) {
-          setTorch(true, false);
-        }
       }
 
       // Guest Trial Check: Limit unauthenticated visitors to 5 cloud AI analyses daily
@@ -815,33 +821,82 @@ export default function BlindHomePage() {
         compass?.directionAr ? `متجه ناحية ${compass.directionAr} (${compass.degrees} درجة)` : ""
       ].filter(Boolean).join(" • ");
 
-      const res = await fetch("/api/ai/analyze", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-session-token": token,
-          "x-username": user.username || "",
-        },
-        body: JSON.stringify({
-          imageBase64: base64,
-          mode,
-          locationInfo: {
-            addressText: locationWithCompass,
-            street: locationDetails?.street,
-            area: locationDetails?.area,
-            city: locationDetails?.city,
-            compassHeading: compass?.directionAr
-          },
-          registeredFaces,
-          userQuestion,
-        }),
-      });
+      let fullText = "";
+      let streamSucceeded = false;
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.text || data.error || "تعذر التحليل");
+      // ── Zero-Latency Streaming Fast Path ───────────────────
+      try {
+        const streamRes = await fetch("/api/vision/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mode,
+            locationInfo: {
+              addressText: locationWithCompass,
+              street: locationDetails?.street,
+              area: locationDetails?.area,
+              city: locationDetails?.city,
+              compassHeading: compass?.directionAr,
+            },
+            registeredFaces,
+            userQuestion,
+          }),
+        });
+
+        if (streamRes.ok && streamRes.headers.get("Content-Type")?.includes("text/plain") && streamRes.body) {
+          const reader = streamRes.body.getReader();
+          const decoder = new TextDecoder();
+          let accumulated = "";
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunk = decoder.decode(value, { stream: true });
+            accumulated += chunk;
+            setCurrentResult(accumulated);
+          }
+
+          if (accumulated.trim()) {
+            fullText = accumulated.trim();
+            streamSucceeded = true;
+          }
+        }
+      } catch {
+        // Fallback to robust standard route below
+      }
+
+      // ── Standard Fallback Route ────────────────────────────
+      if (!streamSucceeded) {
+        const res = await fetch("/api/ai/analyze", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-session-token": token,
+            "x-username": user.username || "",
+          },
+          body: JSON.stringify({
+            imageBase64: base64,
+            mode,
+            locationInfo: {
+              addressText: locationWithCompass,
+              street: locationDetails?.street,
+              area: locationDetails?.area,
+              city: locationDetails?.city,
+              compassHeading: compass?.directionAr
+            },
+            registeredFaces,
+            userQuestion,
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.text || data.error || "تعذر التحليل");
+        fullText = data.text;
+      }
 
       // Warning check for safety obstacles
-      const isObstacleOrRisk = /خطر|عائق|انتبه|حفرة|سلم|عقبة|باب مغلق|سيارة|احذر/.test(data.text);
+      const isObstacleOrRisk = /خطر|عائق|انتبه|حفرة|سلم|عقبة|باب مغلق|سيارة|احذر/.test(fullText);
       if (isObstacleOrRisk) {
         triggerHaptic("error");
         playChime(880, 0.15);
@@ -851,11 +906,11 @@ export default function BlindHomePage() {
         playChime(523.25, 0.1);
       }
 
-      lastDescriptionRef.current = data.text;
-      setDescriptionHistory(prev => [...prev.slice(-9), data.text]);
+      lastDescriptionRef.current = fullText;
+      setDescriptionHistory(prev => [...prev.slice(-9), fullText]);
       historyIndexRef.current = -1;
-      setCurrentResult(data.text);
-      speak(data.text);
+      setCurrentResult(fullText);
+      speak(fullText);
 
       // Consume 1 trial attempt if user is guest
       consumeGuestTrialAttempt();
