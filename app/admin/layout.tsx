@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter, usePathname } from "next/navigation";
 import {
   Users, KeyRound, Activity, ShieldCheck, LogOut, Sparkles,
@@ -69,8 +70,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Mobile Topbar */}
       <header className="md:hidden sticky top-0 z-40 bg-dark-800/95 backdrop-blur-md border-b border-gray-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-gold-500/20 text-gold-400 rounded-xl border border-gold-500/30">
-            <Sparkles className="w-5 h-5" />
+          <div className="p-1.5 bg-dark-900/80 rounded-xl border border-gold-500/30">
+            <Image
+              src="/icons/icon-192.png"
+              alt="Dahab Software"
+              width={28}
+              height={28}
+              className="w-7 h-7 object-contain rounded-lg"
+            />
           </div>
           <div>
             <h1 className="font-black text-base text-gold-400 leading-tight">لوحة نور دهب</h1>
@@ -105,12 +112,18 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           {/* Header */}
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-gold-500/20 text-gold-400 rounded-2xl border border-gold-500/30">
-                <Sparkles className="w-6 h-6" />
+              <div className="p-1.5 bg-dark-900/80 rounded-2xl border border-gold-500/30">
+                <Image
+                  src="/icons/icon-192.png"
+                  alt="Dahab Software"
+                  width={36}
+                  height={36}
+                  className="w-9 h-9 object-contain rounded-xl"
+                />
               </div>
               <div>
                 <h2 className="font-black text-lg text-gold-400 leading-snug">لوحة نور دهب</h2>
-                <span className="text-xs text-gray-400">إدارة النظام الذكي</span>
+                <span className="text-xs text-gray-400">Dahab Software</span>
               </div>
             </div>
 

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { LogIn, ShieldAlert, Sparkles, Volume2, Mic } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 
@@ -86,8 +87,15 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-dark-900">
       <div className="w-full max-w-md bg-dark-800 border-2 border-gold-500/40 rounded-3xl p-6 sm:p-8 shadow-2xl space-y-6">
         <div className="text-center space-y-2">
-          <div className="inline-flex p-4 bg-gold-500/10 rounded-2xl border border-gold-500/30 text-gold-400 mb-2">
-            <Sparkles className="w-10 h-10 animate-pulse" />
+          <div className="inline-flex p-2 bg-dark-900/80 rounded-2xl border border-gold-500/40 shadow-xl shadow-gold-500/10 mb-2">
+            <Image
+              src="/logo.png"
+              alt="شعار Dahab Software"
+              width={100}
+              height={100}
+              className="w-24 h-24 object-contain rounded-xl"
+              priority
+            />
           </div>
           <h1 className="text-3xl font-black text-gold-400 tracking-tight">نور دهب</h1>
           <p className="text-gray-400 text-sm">تسجيل الدخول الصوتي</p>

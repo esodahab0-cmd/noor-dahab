@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import {
   Volume2, VolumeX, Mic, Navigation, RefreshCw, LogOut,
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
@@ -1032,7 +1033,15 @@ export default function BlindHomePage() {
 
       {/* Top Bar */}
       <header className="relative z-20 px-3 pt-3 pb-2 bg-gradient-to-b from-black/95 via-black/80 to-transparent flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <Image
+            src="/icons/icon-192.png"
+            alt="Dahab Software"
+            width={28}
+            height={28}
+            className="w-7 h-7 rounded-lg border border-gold-500/50 shadow-md object-contain shrink-0"
+            priority
+          />
           <span className="font-black text-lg text-white tracking-wide">نور دهب</span>
 
           {/* Offline Badge */}

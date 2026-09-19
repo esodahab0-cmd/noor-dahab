@@ -37,23 +37,29 @@ export const metadata: Metadata = {
     type: "website",
     locale: "ar_EG",
     url: "https://dahabsoftware.online",
-    siteName: "نور دهب - Noor Dahab",
+    siteName: "نور دهب - Dahab Software",
     title: "نور دهب - رفيق المكفوفين الذكي | Dahab Software",
     description: "أقوى مساعد بصري صوتي ذكي للمكفوفين يدمج الكاميرا وتحليل الذكاء الاصطناعي الفوري ومكبر الصوت مجاناً 100%.",
     images: [
       {
-        url: "/icons/icon-512.png",
+        url: "https://dahabsoftware.online/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Dahab Software - نور دهب رفيق المكفوفين الذكي",
+      },
+      {
+        url: "https://dahabsoftware.online/icons/icon-512.png",
         width: 512,
         height: 512,
-        alt: "شعار تطبيق نور دهب للمكفوفين"
-      }
-    ]
+        alt: "شعار Dahab Software",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "نور دهب - رفيق المكفوفين الذكي",
-    description: "مساعد بصري ذكي مخصص للمكفوفين في مصر والوطن العربي - إسلام أبو دهب",
-    images: ["/icons/icon-512.png"]
+    title: "نور دهب - رفيق المكفوفين الذكي | Dahab Software",
+    description: "مساعد بصري ذكي مخصص للمكفوفين في مصر والوطن العربي - Dahab Software",
+    images: ["https://dahabsoftware.online/og-image.png"],
   },
   appleWebApp: {
     capable: true,
@@ -61,8 +67,18 @@ export const metadata: Metadata = {
     title: "نور دهب",
   },
   icons: {
-    icon: "/icons/icon-192.png",
-    apple: "/icons/icon-192.png",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/favicon-32x32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16x16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    shortcut: "/favicon.ico",
   },
 };
 
@@ -97,8 +113,9 @@ export default function RootLayout({
               "@context": "https://schema.org",
               "@type": "WebApplication",
               "name": "نور دهب - رفيق المكفوفين الذكي",
-              "alternateName": "Noor Dahab",
+              "alternateName": "Noor Dahab - Dahab Software",
               "url": "https://dahabsoftware.online",
+              "image": "https://dahabsoftware.online/og-image.png",
               "description": "أقوى نظام ومساعد بصري ذكي فائق السرعة لخدمة الأشخاص المكفوفين وضعاف البصر في مصر والوطن العربي.",
               "applicationCategory": "AccessibilityApplication",
               "operatingSystem": "All (Web, Android, iOS)",
@@ -115,7 +132,11 @@ export default function RootLayout({
               "publisher": {
                 "@type": "Organization",
                 "name": "Dahab Software",
-                "url": "https://dahabsoftware.com"
+                "url": "https://dahabsoftware.online",
+                "logo": {
+                  "@type": "ImageObject",
+                  "url": "https://dahabsoftware.online/icons/icon-512.png"
+                }
               }
             })
           }}

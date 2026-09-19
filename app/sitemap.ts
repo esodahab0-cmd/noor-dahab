@@ -11,6 +11,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'always',
       priority: 1.0,
       images: [
+        `${baseUrl}/og-image.png`,
+        `${baseUrl}/logo.png`,
         `${baseUrl}/icons/icon-512.png`
       ],
     },

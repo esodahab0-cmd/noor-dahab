@@ -8,9 +8,19 @@
     <changefreq>always</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://dahabsoftware.online/icons/icon-512.png</image:loc>
+      <image:loc>https://dahabsoftware.online/logo.png</image:loc>
+      <image:title>شعار Dahab Software الرسمي</image:title>
+      <image:caption>شركة دهب سوفتوير - حلول الذكاء الاصطناعي والأمن السيبراني والأنظمة السحابية</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://dahabsoftware.online/og-image.png</image:loc>
       <image:title>نور دهب - رفيق المكفوفين الذكي | Dahab Software</image:title>
-      <image:caption>أقوى تطبيق ذكاء اصطناعي صوتي لمساعدة فاقدي البصر في مصر والوطن العربي</image:caption>
+      <image:caption>نظام الذكاء الاصطناعي البصري لمساعدة فاقدي البصر - Dahab Software</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://dahabsoftware.online/icons/icon-512.png</image:loc>
+      <image:title>أيقونة تطبيق نور دهب - Dahab Software</image:title>
+      <image:caption>أيقونة التطبيق الرسمية</image:caption>
     </image:image>
   </url>
   <url>
