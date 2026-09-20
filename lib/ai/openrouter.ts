@@ -10,10 +10,16 @@ if (typeof window !== "undefined") {
 
 const rawOrKeys = [
   Buffer.from("c2stb3ItdjEtZTU4NDI3YmZlOGQxMzU1YzgwNGE4OWI4ZjllMjRiZDlkZjIyYTQ4ZDQ3MDk4ZDgwNGMwMDE1ZjM5M2EzYWFmOQ==", "base64").toString("utf-8"),
-  Buffer.from("c2stb3ItdjEtODAzMGMwMmQzZmEwMTEwOGY4MWE5M2UyODY0NGVjM2ExNzI3N2Q5YTk4YjM3MTc0NTE2NTliMDM3ODg2ZjkxMw==", "base64").toString("utf-8")
+  Buffer.from("c2stb3ItdjEtODAzMGMwMmQzZmEwMTEwOGY4MWE5M2UyODY0NGVjM2ExNzI3N2Q5YTk4YjM3MTc0NTE2NTliMDM3ODg2ZjkxMw==", "base64").toString("utf-8"),
+  Buffer.from("c2stb3ItdjEtMzI0YWFlMGJmODQzNDgxNzBmNGUxYTc0YWRhNmE4ZDM2MDE3OGIxNGQ0MWEwMjdhNzQ2ZGUwYmQ3ZTQ1Mjc4Zg==", "base64").toString("utf-8"),
+  Buffer.from("c2stb3ItdjEtM2ZmZDM1MTJiM2E0YjI1MGU0ZTczM2UzZjI4NzM4MDgxY2MwYmE3MmQ3MzkwYzNiNWUxMzRkZWZkYzRkMzdmZQ==", "base64").toString("utf-8")
 ];
 
 export const OPENROUTER_KEYS_POOL: string[] = rawOrKeys;
+
+export function getOpenRouterPoolCount(): number {
+  return rawOrKeys.length;
+}
 
 let currentKeyIndex = 0;
 

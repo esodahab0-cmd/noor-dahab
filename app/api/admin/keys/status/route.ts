@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getGeminiPoolCount } from "@/lib/ai/gemini-pool";
 import { getCloudflareTokenCount } from "@/lib/ai/cloudflare-pool";
+import { getOpenRouterPoolCount } from "@/lib/ai/openrouter";
 import { validateOrigin } from "@/lib/security/cors";
 
 export async function GET(request: NextRequest) {
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   try {
     const geminiCount = getGeminiPoolCount();
     const cloudflareCount = getCloudflareTokenCount();
-    const openrouterCount = 2; // Qwen 2.5 VL 72B Precision Pool
+    const openrouterCount = getOpenRouterPoolCount();
 
     return NextResponse.json({
       success: true,
