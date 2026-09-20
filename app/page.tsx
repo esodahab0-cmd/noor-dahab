@@ -36,6 +36,7 @@ import { recordDailyActivity, generateDailyImpactSpokenReport } from "@/lib/util
 import { shouldSendFrameToAI } from "@/lib/utils/frameDeltaOptimizer";
 import { evaluateProactiveContext } from "@/lib/ai/contextAwareness";
 import { initAutoUpdateWatcher } from "@/lib/utils/appUpdater";
+import { ensureGeoCached, buildLocalLocationText, GeoCacheEntry } from "@/lib/geo/localGeoCache";
 
 export default function BlindHomePage() {
   const router = useRouter();
@@ -76,6 +77,7 @@ export default function BlindHomePage() {
     city?: string;
     spokenText?: string;
   } | null>(null);
+  const [localGeoCache, setLocalGeoCache] = useState<GeoCacheEntry | null>(null);
   const [isSOSOpen, setIsSOSOpen] = useState(false);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>({});
@@ -430,6 +432,14 @@ export default function BlindHomePage() {
             setLocationDetails(data);
           }
         } catch {}
+
+        // ── Trigger offline geo cache prefetch (all streets within 3km) ──
+        // Runs silently in background — downloads once, refreshes when moved >800m
+        ensureGeoCached(lat, lon, (statusMsg) => {
+          console.log("[GeoCache]", statusMsg);
+        }).then((cache) => {
+          if (cache) setLocalGeoCache(cache);
+        }).catch(() => {});
       };
 
       navigator.geolocation.getCurrentPosition(
@@ -878,8 +888,15 @@ export default function BlindHomePage() {
       const token = localStorage.getItem("noor_session_token") || "";
       const registeredFaces = savedFaces.map(f => ({ name: f.name, description: f.relation || "شخص مقرب" }));
 
+      // ── Build location string: prefer server-resolved address, enrich with local cache ──
+      const serverAddress = locationDetails?.spokenText || locationName;
+      // If local cache has data and server didn't return a street name, enrich from local cache
+      const localEnrichment = (!locationDetails?.street && localGeoCache && locationCoords)
+        ? buildLocalLocationText(localGeoCache, locationCoords.lat, locationCoords.lon)
+        : "";
+
       const locationWithCompass = [
-        locationDetails?.spokenText || locationName,
+        serverAddress || localEnrichment,
         compass?.directionAr ? `متجه ناحية ${compass.directionAr} (${compass.degrees} درجة)` : ""
       ].filter(Boolean).join(" • ");
 
