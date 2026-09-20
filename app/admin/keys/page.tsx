@@ -164,7 +164,7 @@ export default function AIKeysAdminPage() {
             </div>
             <div>
               <h3 className="text-lg font-bold text-white">حوض مفاتيح Google Gemini ({keyStats.geminiCount} Keys)</h3>
-              <p className="text-xs text-gray-400">تدوير تلقائي يضمن عدم توقف الخدمة أبداً بنموذج gemini-3.5-flash</p>
+              <p className="text-xs text-gray-400">تدوير تلقائي بين {keyStats.geminiCount} مفاتيح: نموذج gemini-flash-latest + gemini-flash-lite-latest + gemini-3.6-flash + gemini-3.8-flash</p>
             </div>
           </div>
           <span className="px-3 py-1 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-full text-xs font-black">
@@ -194,7 +194,7 @@ export default function AIKeysAdminPage() {
             <div className="p-4 bg-dark-700/60 rounded-2xl border border-gray-700 flex items-center justify-between">
               <div>
                 <p className="font-bold text-white">Google Gemini Pool</p>
-                <p className="text-xs text-gray-400">Flash Latest (13 Keys)</p>
+                <p className="text-xs text-gray-400">Flash Latest + 3.6 + 3.8 ({keyStats.geminiCount} مفاتيح)</p>
               </div>
               {testResults.gemini?.status === "ok" ? (
                 <span className="text-emerald-400 font-black text-sm flex items-center gap-1">
@@ -234,6 +234,40 @@ export default function AIKeysAdminPage() {
                 <span className="text-gray-500 text-xs">غير مفعل</span>
               )}
             </div>
+
+            {/* Groq */}
+            {testResults.groq && (
+              <div className="p-4 bg-dark-700/60 rounded-2xl border border-gray-700 flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-white">Groq Vision</p>
+                  <p className="text-xs text-gray-400">LLaMA 3.2 Vision (1 مفتاح)</p>
+                </div>
+                {testResults.groq?.status === "ok" ? (
+                  <span className="text-emerald-400 font-black text-sm flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" /> {testResults.groq.latencyMs}ms
+                  </span>
+                ) : (
+                  <span className="text-gray-500 text-xs">{testResults.groq?.status === "no_key" ? "لم يُضف مفتاح بعد" : "خطأ في الاتصال"}</span>
+                )}
+              </div>
+            )}
+
+            {/* HuggingFace */}
+            {testResults.huggingface && (
+              <div className="p-4 bg-dark-700/60 rounded-2xl border border-gray-700 flex items-center justify-between">
+                <div>
+                  <p className="font-bold text-white">Hugging Face</p>
+                  <p className="text-xs text-gray-400">BLIP Vision Caption (1 مفتاح)</p>
+                </div>
+                {testResults.huggingface?.status === "ok" ? (
+                  <span className="text-emerald-400 font-black text-sm flex items-center gap-1">
+                    <CheckCircle2 className="w-4 h-4" /> {testResults.huggingface.latencyMs}ms
+                  </span>
+                ) : (
+                  <span className="text-gray-500 text-xs">{testResults.huggingface?.status === "no_key" ? "لم يُضف مفتاح بعد" : "خطأ في الاتصال"}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
