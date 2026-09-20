@@ -1,4 +1,4 @@
-import { AIAnalysisRequest, AIAnalysisResponse, AIKeysConfig, AnalysisMode } from "./types";
+﻿import { AIAnalysisRequest, AIAnalysisResponse, AIKeysConfig, AnalysisMode } from "./types";
 import { analyzeWithGroq } from "./groq";
 import { analyzeWithGeminiPool } from "./gemini-pool";
 import { analyzeWithCloudflarePool } from "./cloudflare-pool";
@@ -96,8 +96,19 @@ ${facesContext}`;
     case "obstacle":
       return `${basePrompt}\nالمطلوب للأمان وتفادي العوائق: حدد أي عائق في طريق الكفيف (درجة سلم طالعة أو نازلة، حفرة، رصيف عالي، عمود نور، شجرة، باب زجاج، عربية راكنة، موتوسيكل) وقدر المسافة بالخطوات بالظبط بالمصري (مثلاً: "حاسب، قدامك رصيف عالي على بعد خطوتين").`;
 
-    case "location":
-      return `${basePrompt}\nالمطلوب: صف معالم المكان والممرات والشارع لضمان حركة آمنة للكفيف بالعامية المصرية.`;
+    case "location": {
+      const locStreet = locationInfo?.street ? `"${locationInfo.street}"` : "";
+      const locArea = locationInfo?.area ? `منطقة "${locationInfo.area}"` : "";
+      const locCity = locationInfo?.city ? `"${locationInfo.city}"` : "";
+      const locFull = locationInfo?.addressText || [locStreet, locArea, locCity].filter(Boolean).join("، ");
+      const hasGPS = !!(locationInfo?.street || locationInfo?.area || locationInfo?.addressText);
+      return `${basePrompt}
+المطلوب لتحديد الموقع والتوجيه بدقة:
+${hasGPS
+  ? `بيانات GPS لهذا الكفيف الآن: ${locFull}. ابدأ ردك فوراً بنطق الموقع بالعامية: "أنت دلوقتي في ${locFull}." ثم صف الشارع والمشهد والمعالم المرئية وأي إرشادات حركة آمنة.`
+  : `GPS لم يحدد اسم الشارع بعد، أخبر الكفيف بذلك واصف المعالم المرئية في الصورة للمساعدة على التوجه بأمان.`
+}`;
+    }
 
     case "companion":
       return `${basePrompt}
