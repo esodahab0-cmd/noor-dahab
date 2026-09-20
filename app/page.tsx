@@ -1354,10 +1354,36 @@ export default function BlindHomePage() {
         return;
       }
 
-      // 5. Emergency SOS
+      // 5a. Direct voice call — WhatsApp or Phone (no screen touch needed for blind user)
+      const emergencyPhoneRaw: string = userProfile?.emergencyPhone || "";
+      const guardianLabel: string = userProfile?.guardianName || "وليك أمرك";
+      const isWhatsAppCall = /واتس|واتساب|وتساب/.test(lower) && /اتصل|رن|كلم|ابعتله|بعتله/.test(lower);
+      const isPhoneCall = /اتصل|تليفون|فون|هاتف|رن/.test(lower) && !/واتس|واتساب|وتساب/.test(lower);
+      const mentionsGuardian = /وليه أمري|وليي أمري|ولي الامر|ولى امرى|المسؤول|أهلي|امي|أبويا|رقم الطوارئ|المسجل/.test(lower);
+
+      if ((isWhatsAppCall || isPhoneCall) && (mentionsGuardian || /اتصل بيه|اتصلي بيه|اتصل به/.test(lower))) {
+        if (!emergencyPhoneRaw) {
+          speak("معنديش رقم طوارئ مسجل ليك. روح على الإعدادات وسجل رقم وليك أمرك.");
+          return;
+        }
+        let cleanPhone = emergencyPhoneRaw.replace(/[^0-9]/g, "");
+        if (cleanPhone.startsWith("01") && cleanPhone.length === 11) {
+          cleanPhone = "2" + cleanPhone;
+        }
+        if (isWhatsAppCall) {
+          speak(`بفتحلك واتساب للاتصال بـ ${guardianLabel} دلوقتي.`);
+          setTimeout(() => { window.open(`https://wa.me/${cleanPhone}`, "_blank"); }, 1200);
+        } else {
+          speak(`بتصل دلوقتي بـ ${guardianLabel} على التليفون.`);
+          setTimeout(() => { window.location.href = `tel:${emergencyPhoneRaw}`; }, 1200);
+        }
+        return;
+      }
+
+      // 5b. Emergency SOS modal
       if (/طوارئ|استغاثة|الحقني|مساعدة|اس او اس/.test(lower)) {
         setIsSOSOpen(true);
-        speak("فتحتلك نداء الطوارئ والاستغاثة.");
+        speak("فتحتلك نداء الطوارئ. قول اتصل بوليه أمري للتليفون، أو واتساب وليه أمري للواتساب.");
         return;
       }
 
