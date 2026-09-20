@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { KeyRound, CheckCircle2, Play, RefreshCw, Shield, Layers, Cloud } from "lucide-react";
+import { KeyRound, CheckCircle2, Play, RefreshCw, Shield, Layers, Cloud, Zap } from "lucide-react";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 
@@ -13,13 +13,14 @@ export default function AIKeysAdminPage() {
     cloudflareApiToken: "",
     huggingfaceKey: "",
     openrouterKey: "",
+    mistralKey: "",
   });
 
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResults, setTestResults] = useState<any>(null);
   const [message, setMessage] = useState("");
-  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2, openrouterCount: 2 });
+  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2, openrouterCount: 6, mistralCount: 2 });
 
   useEffect(() => {
     // Fetch key pool counts securely from server (zero client-side keys)
@@ -30,7 +31,8 @@ export default function AIKeysAdminPage() {
           setKeyStats({
             geminiCount: d.geminiCount ?? 4,
             cloudflareCount: d.cloudflareCount ?? 2,
-            openrouterCount: d.openrouterCount ?? 2,
+            openrouterCount: d.openrouterCount ?? 6,
+            mistralCount: d.mistralCount ?? 2,
           });
         }
       })
@@ -87,7 +89,7 @@ export default function AIKeysAdminPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-black text-white">إدارة وفحص مفاتيح ونماذج الـ AI</h1>
           <p className="text-gray-400 text-xs sm:text-sm mt-1">
-            إجمالي {keyStats.geminiCount + keyStats.cloudflareCount + keyStats.openrouterCount} مفاتيح سيرفر نشطة: {keyStats.geminiCount} Google Gemini + {keyStats.cloudflareCount} Cloudflare Llama + {keyStats.openrouterCount} OpenRouter Qwen 2.5 VL مع نظام تدوير آلي وحماية 100%.
+            إجمالي {keyStats.geminiCount + keyStats.cloudflareCount + keyStats.openrouterCount + keyStats.mistralCount} مفاتيح سيرفر نشطة: {keyStats.geminiCount} Google Gemini + {keyStats.openrouterCount} OpenRouter Vision + {keyStats.mistralCount} Mistral Pixtral + {keyStats.cloudflareCount} Cloudflare Llama مع نظام تدوير وحماية 100%.
           </p>
         </div>
 
@@ -99,6 +101,33 @@ export default function AIKeysAdminPage() {
           {testing ? <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" /> : <Play className="w-4 h-4 sm:w-5 sm:h-5" />}
           {testing ? "جارٍ الفحص الحي..." : "فحص واختبار المفاتيح بنقرة زر"}
         </button>
+      </div>
+
+      {/* Mistral Pixtral Pool Banner */}
+      <div className="p-4 sm:p-6 bg-dark-800 border-2 border-red-500/40 rounded-2xl sm:rounded-3xl space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-red-500/20 text-red-400 rounded-xl">
+              <Zap className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">حوض مفاتيح Mistral AI ({keyStats.mistralCount} Keys)</h3>
+              <p className="text-xs text-gray-400">محرك الرؤية المباشر السريع بنموذج Pixtral 12B Vision المتطور</p>
+            </div>
+          </div>
+          <span className="px-3 py-1 bg-red-500/20 text-red-400 border border-red-500/30 rounded-full text-xs font-black">
+            {keyStats.mistralCount} مفتاح نشط
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
+          {Array.from({ length: keyStats.mistralCount }).map((_, idx) => (
+            <div key={idx} className="p-3 bg-dark-700/60 rounded-xl border border-gray-700 text-xs font-mono text-gray-300 flex items-center justify-between">
+              <span>Mistral Pixtral Key #{idx + 1}</span>
+              <span className="text-red-400 font-bold">✓ نشط (Pixtral 12B)</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* OpenRouter Precision Pool Banner */}
@@ -208,11 +237,26 @@ export default function AIKeysAdminPage() {
             <div className="p-4 bg-dark-700/60 rounded-2xl border border-gray-700 flex items-center justify-between">
               <div>
                 <p className="font-bold text-white">OpenRouter Precision Pool</p>
-                <p className="text-xs text-purple-400">Qwen 2.5 VL 72B (2 Keys)</p>
+                <p className="text-xs text-purple-400">Qwen 2.5 VL 72B ({keyStats.openrouterCount} مفاتيح)</p>
               </div>
               {testResults.openrouter?.status === "ok" ? (
                 <span className="text-emerald-400 font-black text-sm flex items-center gap-1">
                   <CheckCircle2 className="w-4 h-4" /> {testResults.openrouter.latencyMs}ms
+                </span>
+              ) : (
+                <span className="text-red-400 text-xs">تعذر الاتصال</span>
+              )}
+            </div>
+
+            {/* Mistral Pixtral */}
+            <div className="p-4 bg-dark-700/60 rounded-2xl border border-gray-700 flex items-center justify-between">
+              <div>
+                <p className="font-bold text-white">Mistral AI Pool</p>
+                <p className="text-xs text-red-400">Pixtral 12B Vision ({keyStats.mistralCount} مفاتيح)</p>
+              </div>
+              {testResults.mistral?.status === "ok" ? (
+                <span className="text-emerald-400 font-black text-sm flex items-center gap-1">
+                  <CheckCircle2 className="w-4 h-4" /> {testResults.mistral.latencyMs}ms
                 </span>
               ) : (
                 <span className="text-red-400 text-xs">تعذر الاتصال</span>

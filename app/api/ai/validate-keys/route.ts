@@ -4,6 +4,7 @@ import { analyzeWithGeminiPool } from "@/lib/ai/gemini-pool";
 import { analyzeWithCloudflarePool } from "@/lib/ai/cloudflare-pool";
 import { analyzeWithHuggingFace } from "@/lib/ai/huggingface";
 import { analyzeWithOpenRouter } from "@/lib/ai/openrouter";
+import { analyzeWithMistral } from "@/lib/ai/mistral";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import { validateOrigin } from "@/lib/security/cors";
@@ -83,6 +84,15 @@ export async function POST(request: NextRequest) {
       results.openrouter = { status: "ok", latencyMs: orResult.latencyMs, modelUsed: orResult.modelUsed };
     } catch (e: any) {
       results.openrouter = { status: "error", message: e.message };
+    }
+
+    // 6. Test Mistral (Pixtral 12B Vision Pool)
+    try {
+      const customMistralKey = keys.mistralKey || process.env.MISTRAL_API_KEY;
+      const mistralResult = await analyzeWithMistral(testImg, testPrompt, customMistralKey);
+      results.mistral = { status: "ok", latencyMs: mistralResult.latencyMs, modelUsed: mistralResult.modelUsed };
+    } catch (e: any) {
+      results.mistral = { status: "error", message: e.message };
     }
 
     return NextResponse.json({ success: true, results });

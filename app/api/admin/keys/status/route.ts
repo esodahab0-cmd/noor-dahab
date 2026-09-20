@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getGeminiPoolCount } from "@/lib/ai/gemini-pool";
 import { getCloudflareTokenCount } from "@/lib/ai/cloudflare-pool";
 import { getOpenRouterPoolCount } from "@/lib/ai/openrouter";
+import { getMistralPoolCount } from "@/lib/ai/mistral";
 import { validateOrigin } from "@/lib/security/cors";
 
 export async function GET(request: NextRequest) {
@@ -15,12 +16,14 @@ export async function GET(request: NextRequest) {
     const geminiCount = getGeminiPoolCount();
     const cloudflareCount = getCloudflareTokenCount();
     const openrouterCount = getOpenRouterPoolCount();
+    const mistralCount = getMistralPoolCount();
 
     return NextResponse.json({
       success: true,
       geminiCount,
       cloudflareCount,
       openrouterCount,
+      mistralCount,
       hasGroqEnv: Boolean(process.env.GROQ_API_KEY),
       hasHfEnv: Boolean(process.env.HUGGINGFACE_API_KEY),
       timestamp: Date.now()

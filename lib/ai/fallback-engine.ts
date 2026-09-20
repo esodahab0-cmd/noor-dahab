@@ -4,6 +4,7 @@ import { analyzeWithGeminiPool } from "./gemini-pool";
 import { analyzeWithCloudflarePool } from "./cloudflare-pool";
 import { analyzeWithHuggingFace } from "./huggingface";
 import { analyzeWithOpenRouter } from "./openrouter";
+import { analyzeWithMistral } from "./mistral";
 import { canExecuteProvider, recordProviderSuccess, recordProviderFailure } from "./circuitBreaker";
 import { lookupVisionCache, saveVisionCache } from "./perceptualCache";
 
@@ -314,6 +315,32 @@ export async function processVisionWithFallback(
     }
   } else {
     attempted.push("OpenRouter Vision Pool (Circuit OPEN ⚠️ - Skipped)");
+  }
+
+  // ── Tier 6: Mistral AI Pixtral 12B Vision Pool ──────────────
+  if (canExecuteProvider("mistral")) {
+    try {
+      attempted.push("Mistral Pixtral 12B Vision (Tier 6)");
+      const customKey = keys.mistralKey || process.env.MISTRAL_API_KEY;
+      const r = await analyzeWithMistral(imageBase64, prompt, customKey);
+
+      recordProviderSuccess("mistral");
+      saveVisionCache(imageBase64, mode, r.text, "mistral", req.userQuestion);
+
+      return {
+        success: true,
+        text: r.text,
+        provider: "mistral",
+        latencyMs: r.latencyMs,
+        isFallback: true,
+        tierAttempted: attempted
+      };
+    } catch (e: any) {
+      recordProviderFailure("mistral", e.message);
+      console.warn("Tier 6 Mistral failed:", e.message);
+    }
+  } else {
+    attempted.push("Mistral Pixtral 12B Vision (Circuit OPEN ⚠️ - Skipped)");
   }
 
   return {

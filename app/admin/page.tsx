@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Users, Radio, ShieldCheck, Key, ArrowUpRight, Cpu } from "lucide-react";
+import { Users, Radio, ShieldCheck, Key, ArrowUpRight, Cpu, Zap } from "lucide-react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase/config";
 import Link from "next/link";
@@ -20,7 +20,7 @@ interface UserDoc {
 export default function AdminDashboardPage() {
   const [users, setUsers] = useState<UserDoc[]>([]);
   const [loading, setLoading] = useState(true);
-  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2, openrouterCount: 2 });
+  const [keyStats, setKeyStats] = useState({ geminiCount: 4, cloudflareCount: 2, openrouterCount: 6, mistralCount: 2 });
 
   useEffect(() => {
     // Fetch key pool stats securely from server (zero client-side keys)
@@ -31,7 +31,8 @@ export default function AdminDashboardPage() {
           setKeyStats({
             geminiCount: d.geminiCount ?? 4,
             cloudflareCount: d.cloudflareCount ?? 2,
-            openrouterCount: d.openrouterCount ?? 2,
+            openrouterCount: d.openrouterCount ?? 6,
+            mistralCount: d.mistralCount ?? 2,
           });
         }
       })
@@ -77,7 +78,7 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Realtime KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
         {/* Live Online Users */}
         <div className="p-4 sm:p-6 bg-dark-800 border-2 border-emerald-500/40 rounded-2xl sm:rounded-3xl space-y-2 relative overflow-hidden">
           <div className="flex items-center justify-between">
@@ -137,6 +138,18 @@ export default function AdminDashboardPage() {
             <span className="text-2xl sm:text-4xl font-black text-white">{keyStats.openrouterCount}</span>
           </div>
           <p className="text-[10px] sm:text-xs text-gray-400">Qwen 2.5 VL 72B (تحليل أدوية)</p>
+        </div>
+
+        {/* Mistral Keys Pool */}
+        <div className="p-4 sm:p-6 bg-dark-800 border-2 border-red-500/30 rounded-2xl sm:rounded-3xl space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] sm:text-xs font-bold text-red-400 uppercase tracking-wider">حوض Mistral</span>
+            <Zap className="w-4 h-4 sm:w-5 sm:h-5 text-red-400" />
+          </div>
+          <div className="flex items-baseline justify-between">
+            <span className="text-2xl sm:text-4xl font-black text-white">{keyStats.mistralCount}</span>
+          </div>
+          <p className="text-[10px] sm:text-xs text-gray-400">Pixtral 12B Vision نشط</p>
         </div>
       </div>
 
