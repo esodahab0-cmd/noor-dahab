@@ -1,4 +1,4 @@
-// =========================================================================
+﻿// =========================================================================
 // Noor Dahab — Mistral AI Vision Engine (Pixtral 12B Vision)
 // محرك الرؤية فائق السرعة من Mistral AI المخصص للمكفوفين
 // =========================================================================
@@ -58,7 +58,7 @@ export async function analyzeWithMistral(
     signal: AbortSignal.timeout(10000),
     body: JSON.stringify({
       model: modelName,
-      max_tokens: 600,
+      max_tokens: 1200,
       temperature: 0.1,
       messages: [
         {

@@ -1,4 +1,4 @@
-// =========================================================================
+﻿// =========================================================================
 // Noor Dahab — OpenRouter Vision Engine (Qwen 2.5 VL 72B & Deep Analysis)
 // مخصص لتحليل الأدوية بدقة فائقة وقراءة التفاصيل المعقدة للمكفوفين
 // =========================================================================
@@ -64,8 +64,8 @@ export async function analyzeWithOpenRouter(
     signal: AbortSignal.timeout(12000),
     body: JSON.stringify({
       model: modelName,
-      max_tokens: 600,
-      temperature: 0.1,
+      max_tokens: 1200,
+      temperature: 0.4,
       messages: [
         {
           role: "system",

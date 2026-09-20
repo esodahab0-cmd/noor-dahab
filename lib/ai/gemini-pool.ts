@@ -1,4 +1,4 @@
-// SERVER-ONLY PROTECTION: Prevent leaking raw API keys into client bundles
+﻿// SERVER-ONLY PROTECTION: Prevent leaking raw API keys into client bundles
 if (typeof window !== "undefined") {
   throw new Error("SECURITY VIOLATION: Gemini key pool cannot be loaded on the client side.");
 }
@@ -72,7 +72,7 @@ export async function analyzeWithGeminiPool(
             }],
             generationConfig: {
               temperature: 0.05,
-              maxOutputTokens: 600,
+              maxOutputTokens: 1200,
             }
           })
         });
