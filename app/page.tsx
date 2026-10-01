@@ -71,6 +71,7 @@ export default function BlindHomePage() {
 
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState("");
+  const [cameraLoading, setCameraLoading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [currentResult, setCurrentResult] = useState("المس الشاشة لوصف ما أمامك، أو اضغط مطولاً للتحدث.");
   const [locationName, setLocationName] = useState("");
@@ -357,6 +358,7 @@ export default function BlindHomePage() {
   const requestPermissions = async () => {
     setPermState("requesting");
     setCameraError("");
+    setCameraLoading(true);
     unlockSpeaker();
 
     if (typeof navigator === "undefined" || !navigator.mediaDevices?.getUserMedia) {
@@ -412,6 +414,7 @@ export default function BlindHomePage() {
         : "تعذر تشغيل الكاميرا: " + (lastErr?.message || "يرجى التحقق من إعدادات الهاتف");
       setCameraError(msg);
       setPermState("denied");
+      setCameraLoading(false);
       speak(msg);
       return;
     }
@@ -425,18 +428,50 @@ export default function BlindHomePage() {
       vid.setAttribute("webkit-playsinline", "true");
       vid.setAttribute("autoplay", "true");
       vid.srcObject = stream;
-      
-      // Ensure video plays and is visible
-      vid.play().then(() => {
-        console.log("Camera video playing successfully");
-      }).catch((err) => {
-        console.error("Video play error:", err);
-        // Try to play again after a delay
-        setTimeout(() => vid.play().catch(() => {}), 100);
-      });
+
+      // Force load metadata and play
+      vid.load();
+
+      // Ensure video plays and is visible with multiple retry attempts
+      const attemptPlay = async (attempt = 0) => {
+        try {
+          await vid.play();
+          console.log("Camera video playing successfully");
+          // Verify video is actually playing
+          if (vid.readyState >= 2) {
+            console.log("Video ready state:", vid.readyState);
+          }
+        } catch (err) {
+          console.error(`Video play error (attempt ${attempt + 1}):`, err);
+          if (attempt < 3) {
+            setTimeout(() => attemptPlay(attempt + 1), 200 * (attempt + 1));
+          } else {
+            console.error("Failed to play video after 3 attempts");
+            speak("حدثت مشكلة في تشغيل الكاميرا. جرب إعادة تحميل الصفحة.");
+          }
+        }
+      };
+
+      attemptPlay();
+
+      // Add event listeners for debugging
+      vid.onloadedmetadata = () => {
+        console.log("Video metadata loaded:", vid.videoWidth, "x", vid.videoHeight);
+      };
+
+      vid.onplay = () => {
+        console.log("Video is now playing");
+      };
+
+      vid.onerror = (e) => {
+        console.error("Video error:", e);
+      };
+    } else {
+      console.error("videoRef.current is null when trying to set stream");
     }
 
     setCameraReady(true);
+    setCameraLoading(false);
     setPermState("granted");
     unlockSpeaker();
     requestWakeLock();
@@ -1560,7 +1595,8 @@ export default function BlindHomePage() {
         playsInline
         muted
         autoPlay
-        className="absolute inset-0 w-full h-full object-cover opacity-90 filter brightness-105 contrast-110 pointer-events-none"
+        className="absolute inset-0 w-full h-full object-cover opacity-100 pointer-events-none"
+        style={{ backgroundColor: "#000" }}
       />
 
       {/* OLED Battery Saver Blackout Screen */}
@@ -1892,6 +1928,12 @@ export default function BlindHomePage() {
                 <RefreshCw className="w-5 h-5" />
                 حاول تشغيل الكاميرا مجدداً
               </button>
+            </div>
+          )}
+
+          {cameraLoading && cameraReady && (
+            <div className="absolute bottom-4 left-4 bg-blue-600/90 text-white px-3 py-1 rounded-full text-xs font-bold">
+              جاري تحميل الكاميرا...
             </div>
           )}
         </div>
