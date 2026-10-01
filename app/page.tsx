@@ -14,6 +14,8 @@ import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
 import { useSingleSession } from "@/lib/hooks/useSingleSession";
 import { useDeviceSensors } from "@/lib/hooks/useDeviceSensors";
+import { useA11y } from "@/components/GlobalA11yProvider";
+import { useInstantSpeech } from "@/hooks/useInstantSpeech";
 import { analyzeFrameForHazards } from "@/lib/utils/motion-radar";
 import { compressImage } from "@/lib/utils/image";
 import { AnalysisMode } from "@/lib/ai/types";
@@ -63,6 +65,8 @@ export default function BlindHomePage() {
   } = useSpeech();
 
   const { triggerHaptic } = useHaptic();
+  const { announce } = useA11y();
+  const { playClickSound } = useInstantSpeech();
   useSingleSession();
 
   const [cameraReady, setCameraReady] = useState(false);
@@ -418,6 +422,7 @@ export default function BlindHomePage() {
 
     setTimeout(() => {
       speak("تم تشغيل الكاميرا بنجاح. نور دهب في خدمتك الآن.");
+      announce("تم تشغيل الكاميرا بنجاح. يمكنك الآن المس الشاشة للوصف الفوري.");
     }, 100);
 
     if (navigator.geolocation) {
@@ -487,6 +492,15 @@ export default function BlindHomePage() {
     const user = JSON.parse(raw);
     setUserProfile(user);
 
+    // Voice announcement for guest users
+    const isGuest = user?.isGuest || user?.role === "guest" || user?.username === "guest";
+    if (isGuest) {
+      setTimeout(() => {
+        speak("أهلاً بك في نور دهب كزائر. يمكنك استخدام التطبيق بحدود معينة. اضغط على زر الخروج لطلب حساب رسمي.");
+        announce("أنت زائر. يمكنك استخدام التطبيق بحدود معينة. اضغط على زر الخروج لطلب حساب رسمي.");
+      }, 1500);
+    }
+
     // Restore saved active mode preference if exists or apply proactive context
     try {
       const savedMode = localStorage.getItem("noor_preferred_mode") as AnalysisMode;
@@ -511,7 +525,7 @@ export default function BlindHomePage() {
       streamRef.current?.getTracks().forEach(t => t.stop());
       clearInterval(autoScanTimerRef.current);
     };
-  }, [router, speak]);
+  }, [router, speak, announce]);
 
   // ── Active Guest Presence Heartbeat Ping (كل 25 ثانية) ───────
   useEffect(() => {
@@ -1550,7 +1564,10 @@ export default function BlindHomePage() {
         <div className="flex-1 flex items-center gap-1.5 overflow-x-auto py-1 px-1 min-w-0" style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}>
           {/* Speaker Button */}
           <button
-            onClick={handleUnlockSpeaker}
+            onClick={() => {
+              playClickSound();
+              handleUnlockSpeaker();
+            }}
             className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 transition-all border shrink-0 ${
               isAudioUnlocked
                 ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
@@ -1670,12 +1687,16 @@ export default function BlindHomePage() {
 
           {/* Auto Scan Toggle */}
           <button
-            onClick={() => setAutoScanEnabled(!autoScanEnabled)}
+            onClick={() => {
+              playClickSound();
+              setAutoScanEnabled(!autoScanEnabled);
+            }}
             className={`px-2 py-1 rounded-xl text-xs font-bold flex items-center gap-1 border transition-all ${
               autoScanEnabled
                 ? "bg-blue-600 text-white border-blue-400 animate-pulse"
                 : "bg-dark-800 text-gray-300 border-gray-700"
             }`}
+            aria-label={autoScanEnabled ? "إيقاف المسح التلقائي المستمر" : "تفعيل المسح التلقائي المستمر"}
           >
             <Zap className="w-3 h-3 text-gold-400" />
             {autoScanEnabled ? "مستمر ⚡" : "تلقائي"}
@@ -1688,6 +1709,8 @@ export default function BlindHomePage() {
           <button
             onClick={() => setIsSOSOpen(true)}
             className="px-2 py-1 bg-red-600 hover:bg-red-500 text-white font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow shrink-0"
+            aria-label="زر الطوارئ SOS - اضغط لفتح قائمة الاستغاثة وإرسال موقعك"
+            aria-keyshortcuts="S"
           >
             <AlertTriangle className="w-3.5 h-3.5" />
             <span>SOS</span>
@@ -1699,6 +1722,7 @@ export default function BlindHomePage() {
               onClick={() => setIsGuestModalOpen(true)}
               className="px-2.5 py-1 bg-gradient-to-r from-gold-500 to-amber-500 text-dark-950 font-black text-xs rounded-xl flex items-center gap-1 active:scale-95 shadow-lg shrink-0 border border-gold-400 animate-pulse"
               title="أنت زائر: اضغط لطلب حساب رسمي أو تسجيل الخروج"
+              aria-label="طلب حساب رسمي أو تسجيل الخروج من وضع الزائر"
             >
               <LogOut className="w-3.5 h-3.5" />
               <span>خروج</span>
@@ -1708,6 +1732,7 @@ export default function BlindHomePage() {
               onClick={() => { localStorage.clear(); router.push("/login"); }}
               className="p-1.5 bg-dark-800 border border-gray-700 text-gray-400 hover:text-white rounded-xl active:scale-95 shrink-0"
               title="تسجيل الخروج"
+              aria-label="تسجيل الخروج من التطبيق"
             >
               <LogOut className="w-4 h-4" />
             </button>
@@ -1717,6 +1742,54 @@ export default function BlindHomePage() {
 
       {/* PWA Install Banner */}
       <PWAInstallPrompt />
+
+      {/* Navigation Links - Additional Pages */}
+      <div className="flex items-center justify-center gap-2 px-4 py-2 bg-dark-900/80 border-b border-gray-800">
+        <button
+          onClick={() => {
+            playClickSound();
+            speak("كيف يعمل");
+            router.push("/how-it-works");
+          }}
+          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          aria-label="كيف يعمل التطبيق - شرح كيفية استخدام نور دهب"
+        >
+          كيف يعمل
+        </button>
+        <button
+          onClick={() => {
+            playClickSound();
+            speak("عن المشروع");
+            router.push("/about");
+          }}
+          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          aria-label="عن المشروع - معلومات عن المهندس إسلام أبو دهب ودهب سوفتوير"
+        >
+          عن المشروع
+        </button>
+        <button
+          onClick={() => {
+            playClickSound();
+            speak("سياسة الخصوصية");
+            router.push("/privacy");
+          }}
+          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          aria-label="سياسة الخصوصية - كيف نحمي بياناتك الكاميرا والميكروفون والموقع"
+        >
+          الخصوصية
+        </button>
+        <button
+          onClick={() => {
+            playClickSound();
+            speak("شروط الاستخدام");
+            router.push("/terms");
+          }}
+          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          aria-label="شروط الاستخدام - قواعد وإرشادات استخدام التطبيق"
+        >
+          الشروط
+        </button>
+      </div>
 
       {/* CENTER: Permissions / Interactive Touch Area */}
       {permState !== "granted" ? (
@@ -1739,6 +1812,7 @@ export default function BlindHomePage() {
                 type="button"
                 onClick={requestPermissions}
                 className="w-full py-4 bg-gold-500 hover:bg-gold-400 text-dark-900 font-black text-lg rounded-2xl shadow-xl flex items-center justify-center gap-2 active:scale-95 transition-transform animate-pulse cursor-pointer"
+                aria-label="تشغيل الكاميرا ومكبر الصوت - يفتح الكاميرا للرؤية والنطق الصوتي"
               >
                 <ShieldCheck className="w-6 h-6" />
                 تشغيل الكاميرا والاسبيكر
