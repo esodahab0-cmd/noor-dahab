@@ -3,9 +3,9 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 10, 10, 12;
-  --background-end-rgb: 10, 10, 12;
+  --foreground-rgb: 245, 158, 11; /* Amber-400 for WCAG AAA contrast */
+  --background-start-rgb: 2, 6, 23; /* Slate-950 for WCAG AAA contrast */
+  --background-end-rgb: 2, 6, 23;
 }
 
 /* Fullscreen & Scroll Support */
@@ -48,6 +48,45 @@ body {
 
 .red-glow {
   box-shadow: 0 0 35px rgba(239, 68, 68, 0.55);
+}
+
+/* Screen Reader Only - ARIA Accessibility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* WCAG AAA High Contrast Focus Rings */
+*:focus-visible {
+  outline: 4px solid #F59E0B !important;
+  outline-offset: 2px !important;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 4px solid #F59E0B !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 6px rgba(245, 158, 11, 0.3) !important;
+}
+
+/* High Contrast Text Colors */
+.text-high-contrast {
+  color: #F59E0B;
+}
+
+.bg-high-contrast {
+  background-color: #F59E0B;
+  color: #020617;
 }
 
 /* Standalone PWA adjustments */

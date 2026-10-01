@@ -9,6 +9,9 @@ export interface InstantSpeechController {
   stopSpeaking: () => void;
   isSpeaking: boolean;
   isSupported: boolean;
+  playClickSound: () => void;
+  playBeep: (frequency?: number, duration?: number) => void;
+  triggerHaptic: (pattern?: number | number[]) => void;
 }
 
 /**
@@ -27,6 +30,7 @@ export function useInstantSpeech(): InstantSpeechController {
   const speechQueueRef = useRef<string[]>([]);
   const isProcessingQueueRef = useRef(false);
   const streamBufferRef = useRef("");
+  const audioContextRef = useRef<AudioContext | null>(null);
 
   // إعداد الأصوات وتحديد أفضل صوت عربي مصري / عربي فصيح
   useEffect(() => {
@@ -192,6 +196,83 @@ export function useInstantSpeech(): InstantSpeechController {
     }
   }, [processNextInQueue]);
 
+  // ── Web Audio API: Click Sound (Zero-latency audio feedback) ─────
+  const playClickSound = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      const ctx = audioContextRef.current;
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      oscillator.frequency.value = 800;
+      oscillator.type = "sine";
+
+      gainNode.gain.setValueAtTime(0.1, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.05);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + 0.05);
+    } catch (error) {
+      console.error("Audio click error:", error);
+    }
+  }, []);
+
+  // ── Web Audio API: Custom Beep Sound ───────────────────────────────
+  const playBeep = useCallback((frequency: number = 440, duration: number = 0.1) => {
+    if (typeof window === "undefined") return;
+
+    try {
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+
+      const ctx = audioContextRef.current;
+      if (ctx.state === "suspended") {
+        ctx.resume();
+      }
+
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+
+      oscillator.frequency.value = frequency;
+      oscillator.type = "sine";
+
+      gainNode.gain.setValueAtTime(0.15, ctx.currentTime);
+      gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
+
+      oscillator.start(ctx.currentTime);
+      oscillator.stop(ctx.currentTime + duration);
+    } catch (error) {
+      console.error("Audio beep error:", error);
+    }
+  }, []);
+
+  // ── Haptic Vibration (Navigator.vibrate) ───────────────────────────
+  const triggerHaptic = useCallback((pattern: number | number[] = 40) => {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      try {
+        navigator.vibrate(pattern);
+      } catch (error) {
+        console.error("Haptic vibration error:", error);
+      }
+    }
+  }, []);
+
   return {
     speak,
     streamTextChunk,
@@ -199,5 +280,8 @@ export function useInstantSpeech(): InstantSpeechController {
     stopSpeaking,
     isSpeaking,
     isSupported,
+    playClickSound,
+    playBeep,
+    triggerHaptic,
   };
 }

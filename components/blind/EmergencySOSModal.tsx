@@ -28,6 +28,29 @@ export function EmergencySOSModal({
   const [liveToken, setLiveToken] = useState<string>("");
   const syncTimerRef = useRef<any>(null);
 
+  // ── Keyboard Shortcut Listener for SOS (S or س) ─────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "s" || e.key === "S" || e.key === "س") {
+        if (!isOpen) {
+          e.preventDefault();
+          onClose();
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
+
+  // ── Emergency Haptic Pattern on Open ───────────────────────────────
+  useEffect(() => {
+    if (isOpen) {
+      triggerHaptic("error");
+      speak("تم فتح وضع الطوارئ. اختر إرسال الاستغاثة عبر واتساب أو الاتصال المباشر.");
+    }
+  }, [isOpen, speak, triggerHaptic]);
+
   // Generate a live tracking session token when modal opens
   useEffect(() => {
     if (isOpen) {

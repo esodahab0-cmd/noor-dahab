@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
+import { GlobalA11yProvider } from "@/components/GlobalA11yProvider";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://dahabsoftware.online"),
@@ -143,8 +144,10 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-dark-900 text-white h-full w-full overflow-hidden" style={{ fontFamily: "'Cairo', sans-serif" }} suppressHydrationWarning>
-        <ServiceWorkerRegister />
-        {children}
+        <GlobalA11yProvider>
+          <ServiceWorkerRegister />
+          {children}
+        </GlobalA11yProvider>
       </body>
     </html>
   );
