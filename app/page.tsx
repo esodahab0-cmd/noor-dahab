@@ -492,13 +492,20 @@ export default function BlindHomePage() {
     const user = JSON.parse(raw);
     setUserProfile(user);
 
-    // Voice announcement for guest users
+    // Voice announcement for guest users - stronger and more detailed
     const isGuest = user?.isGuest || user?.role === "guest" || user?.username === "guest";
     if (isGuest) {
       setTimeout(() => {
-        speak("أهلاً بك في نور دهب كزائر. يمكنك استخدام التطبيق بحدود معينة. اضغط على زر الخروج لطلب حساب رسمي.");
-        announce("أنت زائر. يمكنك استخدام التطبيق بحدود معينة. اضغط على زر الخروج لطلب حساب رسمي.");
-      }, 1500);
+        // Unlock speaker first to ensure audio plays
+        unlockSpeaker();
+        // Longer delay to ensure speaker is ready
+        setTimeout(() => {
+          const guestMessage = "أهلاً بك في نور دهب كزائر. أنت تستخدم التطبيق في وضع التجربة المجانية. يمكنك تصوير الأشياء والحصول على وصف صوتي لعدد محدود من المرات. للحصول على وصول غير محدود ومميزات كاملة، اضغط على زر الخروج وطلب حساب رسمي.";
+          speak(guestMessage);
+          announce(guestMessage);
+          triggerHaptic("medium");
+        }, 500);
+      }, 1000);
     }
 
     // Restore saved active mode preference if exists or apply proactive context

@@ -25,7 +25,7 @@ export default function AboutPage() {
         <h1 className="text-3xl font-black text-amber-400">عن المشروع</h1>
         <button
           onClick={handleBack}
-          aria-label="العودة إلى الصفحة الرئيسية"
+          aria-label="العودة إلى الصفحة الرئيسية - العودة لاستخدام التطبيق"
           className="p-3 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-full focus:ring-4 focus:ring-amber-400"
         >
           <Home className="w-6 h-6" />
@@ -49,6 +49,12 @@ export default function AboutPage() {
             </p>
             <p className="text-lg leading-relaxed">
               المؤسس والمدير التنفيذي لشركة دهب سوفتوير، مع خبرة واسعة في تطوير تطبيقات الويب والهواتف الذكية.
+            </p>
+            <p className="text-lg leading-relaxed">
+              شغفه هو تمكين ذوي الاحتياجات الخاصة من استخدام التكنولوجيا بسهولة وكفاءة، وتحسين جودة حياتهم اليومية.
+            </p>
+            <p className="text-lg leading-relaxed">
+              يمتلك خبرة في تطوير حلول الذكاء الاصطناعي، واجهات المستخدم القابلة للوصول، وتطبيقات الويب التقدمية (PWA).
             </p>
           </div>
         </section>

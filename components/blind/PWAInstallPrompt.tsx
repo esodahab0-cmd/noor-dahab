@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react";
 import { Download, Smartphone } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
+import { useInstantSpeech } from "@/hooks/useInstantSpeech";
 
 export function PWAInstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [mounted, setMounted] = useState(false);
   const { speak } = useSpeech();
+  const { playClickSound } = useInstantSpeech();
 
   useEffect(() => {
     setMounted(true);
@@ -29,6 +31,7 @@ export function PWAInstallPrompt() {
   }, []);
 
   const handleInstallClick = async () => {
+    playClickSound();
     if (deferredPrompt) {
       try {
         await deferredPrompt.prompt();
@@ -62,6 +65,7 @@ export function PWAInstallPrompt() {
       <button
         onClick={handleInstallClick}
         className="px-4 py-2 bg-gold-400 hover:bg-gold-500 active:scale-95 text-dark-900 text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+        aria-label="تثبيت تطبيق نور دهب على الهاتف - إضافة للشاشة الرئيسية"
       >
         <Download className="w-4 h-4" />
         تثبيت

@@ -25,7 +25,7 @@ export default function TermsPage() {
         <h1 className="text-3xl font-black text-amber-400">شروط الاستخدام</h1>
         <button
           onClick={handleBack}
-          aria-label="العودة إلى الصفحة الرئيسية"
+          aria-label="العودة إلى الصفحة الرئيسية - العودة لاستخدام التطبيق"
           className="p-3 bg-amber-400 hover:bg-amber-300 text-slate-950 rounded-full focus:ring-4 focus:ring-amber-400"
         >
           <Home className="w-6 h-6" />
@@ -192,7 +192,10 @@ export default function TermsPage() {
               نحن نبذل قصارى جهدنا لضمان توفر الخدمة على مدار الساعة، لكن قد تحدث انقطاعات مؤقتة للصيانة أو لأسباب تقنية خارجة عن إرادتنا.
             </p>
             <p className="text-lg leading-relaxed">
-              التطبيق مجاني 100% ونلتزم بتوفيره مجاناً للأبد.
+              التطبيق مجاني 100% ونلتزم بتوفيره مجاناً للأبد لجميع المستخدمين.
+            </p>
+            <p className="text-lg leading-relaxed">
+              جميع الميزات الأساسية متاحة مجاناً دون أي رسوم أو اشتراكات.
             </p>
           </div>
         </section>
