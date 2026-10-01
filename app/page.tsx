@@ -381,15 +381,27 @@ export default function BlindHomePage() {
         video: {
           facingMode: { ideal: "environment" },
           width: { ideal: 1280 },
-          height: { ideal: 720 }
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
         },
         audio: false
       });
     } catch (err: any) {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "environment",
+            width: { ideal: 640 },
+            height: { ideal: 480 }
+          },
+          audio: false
+        });
       } catch (fallbackErr: any) {
-        lastErr = fallbackErr || err;
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        } catch (secondFallbackErr: any) {
+          lastErr = secondFallbackErr || fallbackErr || err;
+        }
       }
     }
 
@@ -411,8 +423,17 @@ export default function BlindHomePage() {
       vid.muted = true;
       vid.setAttribute("playsinline", "true");
       vid.setAttribute("webkit-playsinline", "true");
+      vid.setAttribute("autoplay", "true");
       vid.srcObject = stream;
-      vid.play().catch(() => {});
+      
+      // Ensure video plays and is visible
+      vid.play().then(() => {
+        console.log("Camera video playing successfully");
+      }).catch((err) => {
+        console.error("Video play error:", err);
+        // Try to play again after a delay
+        setTimeout(() => vid.play().catch(() => {}), 100);
+      });
     }
 
     setCameraReady(true);
@@ -1083,6 +1104,9 @@ export default function BlindHomePage() {
   const lastTwoFingerTapTimeRef = useRef<number>(0);
 
   const handlePointerDown = (e: React.PointerEvent) => {
+    // Prevent multiple simultaneous touches
+    if (isLongPressRef.current) return;
+
     isLongPressRef.current = false;
     clearTimeout(longPressTimerRef.current);
 
@@ -1109,6 +1133,10 @@ export default function BlindHomePage() {
 
   const handlePointerUp = () => {
     clearTimeout(longPressTimerRef.current);
+    // Reset long press flag after a short delay to prevent immediate re-trigger
+    setTimeout(() => {
+      isLongPressRef.current = false;
+    }, 100);
   };
 
   // ── Conversational & Knowledge AI (الرد الصوتي على الأسئلة المعرفية والعلمية دون كاميرا) ──
@@ -1193,6 +1221,12 @@ export default function BlindHomePage() {
 
   // ── Comprehensive Voice Assistant Command Processor ─────────
   const handleVoiceCommand = () => {
+    // Prevent multiple simultaneous listening sessions
+    if (isListening) {
+      speak("أنا أسمعك بالفعل. تفضل بالتحدث.");
+      return;
+    }
+
     unlockSpeaker();
     if (permState !== "granted") {
       speak("يرجى تشغيل الكاميرا والميكروفون أولاً بالضغط على زر البدء.");
@@ -1871,6 +1905,7 @@ export default function BlindHomePage() {
           onClick={handleCenterTap}
           aria-label="نقرة للوصف • ضغط مطول للتحدث • أزرار الصوت للتصوير • 4 نقرات للطوارئ"
           className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform"
+          style={{ touchAction: "manipulation" }}
         >
           <div className={`w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-3 ${
             analyzing ? "border-blue-400 bg-blue-500/30"
