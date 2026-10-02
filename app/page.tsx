@@ -585,10 +585,11 @@ export default function BlindHomePage() {
 
     return () => {
       clearTimeout(timer);
-      streamRef.current?.getTracks().forEach(t => t.stop());
+      // Don't stop camera on cleanup - only stop on explicit logout
+      // streamRef.current?.getTracks().forEach(t => t.stop());
       clearInterval(autoScanTimerRef.current);
     };
-  }, [router, speak, announce]);
+  }, [router]);
 
   // ── Active Guest Presence Heartbeat Ping (كل 25 ثانية) ───────
   useEffect(() => {
