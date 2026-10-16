@@ -1445,6 +1445,15 @@ export default function BlindHomePage() {
         return;
       }
 
+      // 4.14 Voice Install App (تثبيت التطبيق على الموبايل صوتياً)
+      if (/ثبت التطبيق|تثبيت التطبيق|تنزيل التطبيق|تحميل التطبيق|ثبت البرنامج|تثبيت البرنامج|عايز انزل التطبيق|عايز اثبت/.test(lower)) {
+        speak("بفتحلك نافذة تثبيت نور دهب على موبايلك دلوقتي.");
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(new CustomEvent("trigger-pwa-install"));
+        }
+        return;
+      }
+
       // 5a. Direct voice call — WhatsApp or Phone (no screen touch needed for blind user)
       const emergencyPhoneRaw: string = userProfile?.emergencyPhone || "";
       const guardianLabel: string = userProfile?.guardianName || "وليك أمرك";

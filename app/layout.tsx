@@ -108,6 +108,22 @@ export default function RootLayout({
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&display=swap" rel="stylesheet" />
         <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              window.__pwaInstallPrompt = null;
+              window.addEventListener('beforeinstallprompt', function(e) {
+                e.preventDefault();
+                window.__pwaInstallPrompt = e;
+                window.dispatchEvent(new CustomEvent('pwa-prompt-ready'));
+              });
+              window.addEventListener('appinstalled', function() {
+                window.__pwaInstallPrompt = null;
+                window.dispatchEvent(new CustomEvent('pwa-installed'));
+              });
+            `,
+          }}
+        />
+        <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{
             __html: JSON.stringify({

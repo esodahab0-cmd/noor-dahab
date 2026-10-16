@@ -2,7 +2,8 @@
   "name": "نور دهب - مساعد المكفوفين | Dahab Software",
   "short_name": "نور دهب",
   "description": "مساعد ذكي صوتي لفاقدي البصر - ابتكار وتطوير Dahab Software",
-  "start_url": "/",
+  "id": "/?source=pwa",
+  "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": [
@@ -21,6 +22,22 @@
   ],
   "lang": "ar",
   "dir": "rtl",
+  "screenshots": [
+    {
+      "src": "/og-image.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "نور دهب - مساعد المكفوفين الذكي"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "واجهة المساعد الصوتي فائق السرعة"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-128.png",
