@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { Download, Smartphone, Share2, PlusSquare, ExternalLink, X, CheckCircle2 } from "lucide-react";
+import { Download, Smartphone, Share2, PlusSquare, ExternalLink, X, CheckCircle2, ArrowUpRight } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useInstantSpeech } from "@/hooks/useInstantSpeech";
 
@@ -13,6 +13,7 @@ export function PWAInstallPrompt() {
   const [isInAppBrowser, setIsInAppBrowser] = useState(false);
   const [showIOSModal, setShowIOSModal] = useState(false);
   const [showInAppModal, setShowInAppModal] = useState(false);
+  const [showAndroidHelpModal, setShowAndroidHelpModal] = useState(false);
   const [installedSuccess, setInstalledSuccess] = useState(false);
 
   const { speak } = useSpeech();
@@ -96,28 +97,55 @@ export function PWAInstallPrompt() {
       return;
     }
 
-    // حالة 3: أندرويد وكروم (تثبيت فوري بنقرة واحدة بدون أي قوائم)
-    const activePrompt = deferredPrompt || (window as any).__pwaInstallPrompt;
+    // حالة 3: محاولة جلب الـ Prompt الفوري مع مهلة انتظار ذكية
+    let activePrompt = deferredPrompt || (window as any).__pwaInstallPrompt;
+
+    if (!activePrompt && typeof window !== "undefined") {
+      activePrompt = await new Promise((resolve) => {
+        const timer = setTimeout(() => resolve(null), 800);
+        const onReady = () => {
+          clearTimeout(timer);
+          window.removeEventListener("pwa-prompt-ready", onReady);
+          resolve((window as any).__pwaInstallPrompt);
+        };
+        window.addEventListener("pwa-prompt-ready", onReady);
+      });
+    }
+
+    // تحقق من التطبيقات المثبتة بالفعل عبر المتصفح
+    if (typeof navigator !== "undefined" && "getInstalledRelatedApps" in navigator) {
+      try {
+        const related = await (navigator as any).getInstalledRelatedApps();
+        if (related && related.length > 0) {
+          speak("تطبيق نور دهب مثبت بالفعل على هذا الهاتف! ستجده في شاشتك الرئيسية وقائمة التطبيقات.");
+          setIsStandalone(true);
+          return;
+        }
+      } catch {}
+    }
 
     if (activePrompt) {
       try {
-        speak("جاري فتح نافذة التثبيت المباشر على هاتفك الآن.");
+        speak("جاري فتح نافذة تثبيت التطبيق على هاتفك الآن.");
         await activePrompt.prompt();
         const choice = await activePrompt.userChoice;
-        if (choice.outcome === "accepted") {
+        if (choice && choice.outcome === "accepted") {
           speak("تم تثبيت نور دهب بنجاح على هاتفك.");
           (window as any).__pwaInstallPrompt = null;
           setDeferredPrompt(null);
+          setIsStandalone(true);
         } else {
-          speak("تم إلغاء التثبيت.");
+          speak("تم إغلاق نافذة التثبيت.");
         }
       } catch (err) {
         console.warn("PWA Prompt error:", err);
-        speak("اضغط على زر تثبيت الظاهر أمامك على الشاشة لتأكيد التثبيت.");
+        setShowAndroidHelpModal(true);
+        speak("اضغط على تثبيت التطبيق من أعلى المتصفح لإتمام التثبيت.");
       }
     } else {
-      // محاولة استدعاء تلقائي في حال كان المتصفح يدعم ذلك أو عرض إشعار سريع
-      speak("جاري فحص جاهزية التثبيت المباشر. اضغط مرة أخرى للتأكيد.");
+      // إن كان المتصفح حجب الـ prompt تلقائياً (مثلاً بسبب إلغاء سابق أو إعدادات الهاتف)
+      setShowAndroidHelpModal(true);
+      speak("لتثبيت التطبيق على هاتفك: اضغط على تثبيت التطبيق من شريط العنوان في أعلى المتصفح.");
     }
   }, [deferredPrompt, isInAppBrowser, isIOS, playClickSound, speak]);
 
@@ -145,7 +173,7 @@ export function PWAInstallPrompt() {
                 نقرة واحدة
               </span>
             </div>
-            <p className="text-[10px] text-gray-300 font-medium">يعمل كتطبيق أصلي سريع بدون متصفح</p>
+            <p className="text-[10px] text-gray-300 font-medium">يعمل كتطبيق أصلي سريع وشاشة كاملة</p>
           </div>
         </div>
 
@@ -159,9 +187,55 @@ export function PWAInstallPrompt() {
         </button>
       </div>
 
+      {/* نافذة إرشاد أندرويد في حال حجب المتصفح للـ prompt التلقائي */}
+      {showAndroidHelpModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fadeIn">
+          <div className="bg-dark-900 border-2 border-amber-400/80 rounded-3xl p-5 max-w-sm w-full text-center shadow-2xl relative">
+            <button
+              onClick={() => setShowAndroidHelpModal(false)}
+              className="absolute top-4 left-4 p-2 text-gray-400 hover:text-white bg-dark-800 rounded-full"
+              aria-label="إغلاق"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-14 h-14 mx-auto mb-3 bg-amber-400/20 rounded-2xl flex items-center justify-center border border-amber-400/50">
+              <Smartphone className="w-7 h-7 text-amber-400" />
+            </div>
+
+            <h3 className="text-base font-black text-white mb-2">تثبيت التطبيق على هاتفك</h3>
+            <p className="text-xs text-gray-300 mb-4">
+              يمكنك تأكيد تثبيت التطبيق مباشرة من متصفحك عبر إحدى الطريقتين:
+            </p>
+
+            <div className="space-y-2.5 text-right bg-dark-800/80 p-3 rounded-2xl border border-gray-700 text-xs text-gray-200">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-amber-400/20 text-amber-300 rounded-lg">
+                  <Download className="w-4 h-4" />
+                </div>
+                <span>1. اضغط على أيقونة <strong>تثبيت التطبيق</strong> بجانب رابط الموقع بأعلى المتصفح.</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-amber-400/20 text-amber-300 rounded-lg">
+                  <PlusSquare className="w-4 h-4" />
+                </div>
+                <span>2. أو اضغط خيارات المتصفح واختر <strong>تثبيت التطبيق</strong> أو <strong>إضافة للشاشة الرئيسية</strong>.</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowAndroidHelpModal(false)}
+              className="w-full mt-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-dark-900 font-black rounded-xl text-xs transition-all"
+            >
+              فهمت
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* نافذة إرشاد التثبيت على آيفون (iOS) */}
       {showIOSModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="bg-dark-900 border-2 border-amber-400/80 rounded-3xl p-5 max-w-sm w-full text-center shadow-2xl relative">
             <button
               onClick={() => setShowIOSModal(false)}
@@ -207,7 +281,7 @@ export function PWAInstallPrompt() {
 
       {/* نافذة التحويل لمتصفح كروم عند الفتح من واتساب أو فيسبوك */}
       {showInAppModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fadeIn">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/85 backdrop-blur-sm p-4 animate-fadeIn">
           <div className="bg-dark-900 border-2 border-amber-400/80 rounded-3xl p-5 max-w-sm w-full text-center shadow-2xl relative">
             <button
               onClick={() => setShowInAppModal(false)}

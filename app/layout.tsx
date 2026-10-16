@@ -110,6 +110,9 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(function(){});
+              }
               window.__pwaInstallPrompt = null;
               window.addEventListener('beforeinstallprompt', function(e) {
                 e.preventDefault();

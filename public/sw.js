@@ -7,6 +7,16 @@ const CACHE_VERSION = "noor-dahab-v" + Date.now();
 self.addEventListener("install", (e) => {
   // تثبيت فوري بدون انتظار إغلاق الجلسات القديمة
   self.skipWaiting();
+  e.waitUntil(
+    caches.open(CACHE_VERSION).then((cache) => {
+      return cache.addAll([
+        "/",
+        "/manifest.json",
+        "/icons/icon-192.png",
+        "/icons/icon-512.png"
+      ]).catch(() => {});
+    })
+  );
 });
 
 self.addEventListener("activate", (e) => {
