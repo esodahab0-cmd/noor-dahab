@@ -29,7 +29,8 @@ import { findNearestMetroStation, NearestMetroResult } from "@/lib/utils/metro-n
 import { getGuestTrialStatus, consumeGuestTrialAttempt, GUEST_EXHAUSTED_MESSAGE } from "@/lib/utils/guest-trial";
 import { startLightMeter, stopLightMeter, isLightMeterActive, getLightDescription } from "@/lib/utils/light-meter";
 import { analyzeDocumentFraming, resetDocumentGuidanceCounter } from "@/lib/utils/document-detector";
-import { playSpatialHazardBeep } from "@/lib/utils/spatial-audio";
+import { playSpatialHazardBeep, playDirectionalCueFromText } from "@/lib/utils/spatial-audio";
+import { triggerHapticFromText } from "@/lib/haptics/smartHaptics";
 import { detectCurrencyOffline } from "@/lib/utils/offline-currency";
 import { optimizeImageForTask } from "@/lib/utils/smartImageOptimizer";
 import { findMatchingMedicationTag, getAllMedicationTags, MedicationAudioTag } from "@/lib/utils/medication-audio-locker";
@@ -179,7 +180,7 @@ export default function BlindHomePage() {
         const now = Date.now();
         if (now - lastRadarWarningTimeRef.current > 3500) {
           lastRadarWarningTimeRef.current = now;
-          triggerHaptic("error");
+          triggerHapticFromText(res.message);
           playSpatialHazardBeep(res.pan, res.intensity > 0.75 ? "danger" : "warning");
           setCurrentResult(res.message);
           speak(res.message);
@@ -1052,15 +1053,24 @@ export default function BlindHomePage() {
         fullText = data.text;
       }
 
-      // Warning check for safety obstacles
+      // ── Phase 1: 3D Spatial Audio & Smart Directional Haptics ──
+      // 1. Play stereo-panned sound cue in corresponding ear (left / right / center)
+      const spatial = playDirectionalCueFromText(fullText);
+
+      // 2. Trigger smart tactile vibration pattern (danger, steer left, steer right, clear path)
+      triggerHapticFromText(fullText);
+
+      // 3. Fallback warning / success chimes if no specific directional cue was triggered
       const isObstacleOrRisk = /خطر|عائق|انتبه|حفرة|سلم|عقبة|باب مغلق|سيارة|احذر/.test(fullText);
-      if (isObstacleOrRisk) {
-        triggerHaptic("error");
-        playChime(880, 0.15);
-        setTimeout(() => playChime(440, 0.25), 180);
-      } else {
-        triggerHaptic("success");
-        playChime(523.25, 0.1);
+      if (!spatial.hasDirectionalCue) {
+        if (isObstacleOrRisk) {
+          triggerHaptic("error");
+          playChime(880, 0.15);
+          setTimeout(() => playChime(440, 0.25), 180);
+        } else {
+          triggerHaptic("success");
+          playChime(523.25, 0.1);
+        }
       }
 
       lastDescriptionRef.current = fullText;
