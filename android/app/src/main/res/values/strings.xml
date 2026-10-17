@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">نور دهب</string>
+    <string name="title_activity_main">نور دهب</string>
+    <string name="package_name">online.dahabsoftware.noordahab</string>
+    <string name="custom_url_scheme">online.dahabsoftware.noordahab</string>
+</resources>
