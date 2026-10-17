@@ -39,13 +39,13 @@ jobs:
           cd android
           ./gradlew assembleDebug --stacktrace
           cd ..
-          cp android/app/build/outputs/apk/debug/app-debug.apk ./NoorDahab.apk
+          find android/app/build/outputs/apk/ -name "*.apk" -exec cp {} ./nour-dahab-v2.apk \;
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NoorDahab-Android-APK
-          path: ./NoorDahab.apk
+          name: nour-dahab-v2-apk
+          path: ./nour-dahab-v2.apk
           retention-days: 30
 
       - name: Create or Update GitHub Release
@@ -55,12 +55,13 @@ jobs:
           tag_name: v2.0.0-apk
           name: "نور دهب - تطبيق أندرويد الرسمي v2.0"
           body: |
-            ### 📱 تطبيق نور دهب الرسمي للأندرويد (APK)
+            ### 📱 تطبيق نور دهب الرسمي للأندرويد (nour-dahab-v2.apk)
             - يعمل كتطبيق مستقل بدون الحاجة لأي متصفح.
-            - متصل بالسيرفر الحي ويتحدث تلقائياً مع كل تطوير.
-            - دعم الصوت ثلاثي الأبعاد والاهتزازات الذكية.
+            - متصل بالسيرفر الحي (https://dahabsoftware.online) ويتحدث تلقائياً مع كل تطوير في نفس اللحظة!
+            - تفعيل كامل لصلاحيات الكاميرا والمايكروفون والحساسات.
+            - دعم الصوت ثلاثي الأبعاد 3D والاهتزازات الذكية.
             - رادار استشعار السقوط التلقائي.
-            - يعمل محلياً في هاتفك بأعلى معايير الخصوصية.
-          files: ./NoorDahab.apk
+            - يعمل محلياً في هاتفك بأعلى معايير الخصوصية 100%.
+          files: ./nour-dahab-v2.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

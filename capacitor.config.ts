@@ -1,43 +1,24 @@
-interface CapacitorConfig {
-  appId: string;
-  appName: string;
-  webDir: string;
-  server?: {
-    androidScheme?: string;
-    url?: string;
-    cleartext?: boolean;
-  };
-  plugins?: Record<string, any>;
-  android?: Record<string, any>;
-  ios?: Record<string, any>;
-}
+import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
   appId: "online.dahabsoftware.noordahab",
   appName: "نور دهب",
-  webDir: "out",
+  webDir: "public",
   server: {
-    androidScheme: "https",
+    // قراءة التطبيق مباشرة من الموقع الحي لضمان التحديث التلقائي الفوري لجميع الهواتف
     url: "https://dahabsoftware.online",
-    cleartext: false,
-  },
-  plugins: {
-    SplashScreen: {
-      launchShowDuration: 1500,
-      backgroundColor: "#000000",
-      showSpinner: false,
-      androidSplashResourceName: "splash",
-    },
-    StatusBar: {
-      backgroundColor: "#000000",
-      style: "DARK",
-    },
+    cleartext: true,
+    allowNavigation: [
+      "dahabsoftware.online",
+      "*.google.com",
+      "wa.me"
+    ]
   },
   android: {
-    allowMixedContent: false,
+    allowMixedContent: true,
     captureInput: true,
-    webContentsDebuggingEnabled: false,
-  },
+    webContentsDebuggingEnabled: false
+  }
 };
 
 export default config;
