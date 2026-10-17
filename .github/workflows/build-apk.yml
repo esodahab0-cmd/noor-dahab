@@ -47,9 +47,24 @@ jobs:
       - name: Build Debug APK with Gradle
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          ./gradlew assembleDebug --stacktrace --no-daemon > ../build_log.txt 2>&1 || {
+            python3 -c "
+with open('../build_log.txt', 'r', errors='ignore') as f:
+    err_lines = [l.strip() for l in f if any(w in l for w in ['FAILURE:', 'What went wrong:', 'Could not', 'Execution failed', '> '])]
+msg = ' -- '.join(err_lines[:8]).replace('\n', ' ')
+print(f'::error title=Gradle Error::{msg}')
+" || true
+            exit 1
+          }
           cd ..
           find android/app/build/outputs/apk/ -name "*.apk" -exec cp {} ./nour-dahab-v2.apk \;
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-build-log
+          path: build_log.txt
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
@@ -75,11 +90,3 @@ jobs:
           files: ./nour-dahab-v2.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Upload Build Reports on Failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-build-reports
-          path: |
-            android/app/build/reports/
