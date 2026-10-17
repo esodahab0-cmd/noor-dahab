@@ -1,0 +1,19 @@
+{
+	"appId": "online.dahabsoftware.noordahab",
+	"appName": "نور دهب",
+	"webDir": "public",
+	"server": {
+		"url": "https://dahabsoftware.online",
+		"cleartext": true,
+		"allowNavigation": [
+			"dahabsoftware.online",
+			"*.google.com",
+			"wa.me"
+		]
+	},
+	"android": {
+		"allowMixedContent": true,
+		"captureInput": true,
+		"webContentsDebuggingEnabled": false
+	}
+}
