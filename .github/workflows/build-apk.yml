@@ -46,27 +46,14 @@ jobs:
 
       - name: Build Debug APK with Gradle
         run: |
+          set -o pipefail
           cd android
-          ./gradlew assembleDebug --stacktrace --no-daemon > ../build_log.txt 2>&1 || {
-            python3 -c "
-with open('../build_log.txt', 'r', errors='ignore') as f:
-    err_lines = [l.strip() for l in f if any(w in l for w in ['FAILURE:', 'What went wrong:', 'Could not', 'Execution failed', '> '])]
-msg = ' -- '.join(err_lines[:8]).replace('\n', ' ')
-print(f'::error title=Gradle Error::{msg}')
-" || true
-            exit 1
-          }
+          ./gradlew assembleDebug --stacktrace --no-daemon 2>&1 | tee ../build_log.txt
           cd ..
           find android/app/build/outputs/apk/ -name "*.apk" -exec cp {} ./nour-dahab-v2.apk \;
 
-      - name: Upload Build Log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: gradle-build-log
-          path: build_log.txt
-
       - name: Upload APK Artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: nour-dahab-v2-apk
@@ -74,7 +61,7 @@ print(f'::error title=Gradle Error::{msg}')
           retention-days: 30
 
       - name: Create or Update GitHub Release
-        if: startsWith(github.ref, 'refs/heads/main')
+        if: success() && startsWith(github.ref, 'refs/heads/main')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v2.0.0-apk
@@ -88,5 +75,16 @@ print(f'::error title=Gradle Error::{msg}')
             - رادار استشعار السقوط التلقائي.
             - يعمل محلياً في هاتفك بأعلى معايير الخصوصية 100%.
           files: ./nour-dahab-v2.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish Failure Log to Release
+        if: failure()
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-failure
+          name: "Gradle Build Failure Log"
+          body: "Automatic diagnostic log for failed Gradle APK build."
+          files: build_log.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
