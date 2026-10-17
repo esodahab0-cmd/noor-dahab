@@ -177,14 +177,25 @@ export function PWAInstallPrompt() {
           </div>
         </div>
 
-        <button
-          onClick={handleInstallClick}
-          className="px-4 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-95 text-dark-900 text-xs font-black rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer ring-2 ring-amber-400/50"
-          aria-label="تثبيت تطبيق نور دهب مباشرة على هاتفك بنقرة واحدة"
-        >
-          <Download className="w-4 h-4 stroke-[3]" />
-          <span>تثبيت الآن</span>
-        </button>
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={handleInstallClick}
+            className="px-3.5 py-2.5 bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 active:scale-95 text-dark-900 text-xs font-black rounded-xl shadow-lg transition-all flex items-center gap-1.5 cursor-pointer ring-2 ring-amber-400/50"
+            aria-label="تثبيت تطبيق نور دهب مباشرة على هاتفك بنقرة واحدة"
+          >
+            <Download className="w-4 h-4 stroke-[3]" />
+            <span>تثبيت</span>
+          </button>
+          <a
+            href="/download"
+            onClick={playClickSound}
+            className="px-2.5 py-2.5 bg-dark-800 hover:bg-dark-700 text-amber-300 text-xs font-black rounded-xl border border-amber-500/40 transition-all flex items-center gap-1 shadow-md"
+            title="تحميل ملف تطبيق الأندرويد APK"
+            aria-label="تحميل تطبيق الأندرويد APK"
+          >
+            <span>APK</span>
+          </a>
+        </div>
       </div>
 
       {/* نافذة إرشاد أندرويد في حال حجب المتصفح للـ prompt التلقائي */}
@@ -223,11 +234,20 @@ export function PWAInstallPrompt() {
               </div>
             </div>
 
+            <a
+              href="/download"
+              onClick={playClickSound}
+              className="w-full mt-3 py-3 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-dark-900 font-black rounded-xl text-xs flex items-center justify-center gap-2 shadow-lg transition-all"
+            >
+              <Download className="w-4 h-4 stroke-[3]" />
+              <span>أو تحميل ملف الأندرويد (APK) المباشر</span>
+            </a>
+
             <button
               onClick={() => setShowAndroidHelpModal(false)}
-              className="w-full mt-4 py-2.5 bg-amber-400 hover:bg-amber-500 text-dark-900 font-black rounded-xl text-xs transition-all"
+              className="w-full mt-2 py-2 bg-dark-800 hover:bg-dark-700 text-gray-400 hover:text-white font-bold rounded-xl text-xs transition-all"
             >
-              فهمت
+              إغلاق
             </button>
           </div>
         </div>

@@ -8,7 +8,7 @@ import {
   Eye, FileText, Banknote, Pill, Users, AlertTriangle,
   Camera, ShieldCheck, UserPlus, Save, Zap,
   Shirt, Search, Monitor, Bus, QrCode, RotateCcw,
-  Moon, Gauge, WifiOff, Compass, Train, Cpu, Sun, CreditCard, Globe
+  Moon, Gauge, WifiOff, Compass, Train, Cpu, Sun, CreditCard, Globe, Download
 } from "lucide-react";
 import { useSpeech } from "@/lib/hooks/useSpeech";
 import { useHaptic } from "@/lib/hooks/useHaptic";
@@ -1866,7 +1866,19 @@ export default function BlindHomePage() {
       <PWAInstallPrompt />
 
       {/* Navigation Links - Additional Pages */}
-      <div className="flex items-center justify-center gap-2 px-4 py-2 bg-dark-900/80 border-b border-gray-800">
+      <div className="flex items-center justify-center gap-1.5 px-3 py-2 bg-dark-900/80 border-b border-gray-800 overflow-x-auto no-scrollbar">
+        <button
+          onClick={() => {
+            playClickSound();
+            speak("تحميل تطبيق أندرويد الرسمي");
+            router.push("/download");
+          }}
+          className="px-3 py-1.5 bg-gradient-to-r from-amber-500/25 to-amber-600/25 text-amber-300 text-xs font-black rounded-lg border border-amber-400/60 hover:bg-amber-500/40 active:scale-95 transition-all flex items-center gap-1 shrink-0 shadow-sm"
+          aria-label="تحميل تطبيق أندرويد الرسمي APK"
+        >
+          <Download className="w-3.5 h-3.5" />
+          <span>تحميل APK</span>
+        </button>
         <button
           onClick={() => {
             playClickSound();
