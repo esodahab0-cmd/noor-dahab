@@ -20,11 +20,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_21
         targetCompatibility JavaVersion.VERSION_21
     }
-    applicationVariants.all { variant ->
-        variant.outputs.all {
-            outputFileName = "nour-dahab-v2.apk"
-        }
-    }
     buildTypes {
         release {
             minifyEnabled false
