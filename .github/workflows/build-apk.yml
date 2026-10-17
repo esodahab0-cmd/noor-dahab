@@ -33,10 +33,9 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Accept Android SDK Licenses & Prepare SDK
+      - name: Accept Android SDK Licenses
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-36" "build-tools;36.0.0" || true
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -48,7 +47,7 @@ jobs:
         run: |
           cd android
           ./gradlew assembleDebug --stacktrace 2>&1 | tee ../gradle_output.txt || {
-            ERR=$(tail -n 35 ../gradle_output.txt | tr '\r\n' ' ')
+            ERR=$(grep -E "FAILURE:|ERROR:|What went wrong:|Could not|Exception" ../gradle_output.txt | head -n 5 | tr '\r\n' '; ')
             echo "::error title=Gradle Build Failure::$ERR"
             exit 1
           }
