@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - 'android/**'
+      - 'capacitor.config.ts'
       - 'capacitor.config.json'
       - '.github/workflows/build-apk.yml'
   workflow_dispatch:
@@ -23,13 +24,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Java JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
 
       - name: Grant Execute Permission for Gradlew
         run: chmod +x android/gradlew
@@ -37,7 +35,7 @@ jobs:
       - name: Build Debug APK with Gradle
         run: |
           cd android
-          ./gradlew assembleDebug --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace
           cd ..
           find android/app/build/outputs/apk/ -name "*.apk" -exec cp {} ./nour-dahab-v2.apk \;
 
