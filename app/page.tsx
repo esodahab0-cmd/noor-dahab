@@ -21,6 +21,8 @@ import { compressImage } from "@/lib/utils/image";
 import { AnalysisMode } from "@/lib/ai/types";
 import { PWAInstallPrompt } from "@/components/blind/PWAInstallPrompt";
 import { EmergencySOSModal } from "@/components/blind/EmergencySOSModal";
+import { FallAlertModal } from "@/components/blind/FallAlertModal";
+import { globalFallDetector } from "@/lib/sensors/fallDetector";
 import { GuestAccountRequestModal } from "@/components/blind/GuestAccountRequestModal";
 import { saveFaceLocally, getAllSavedFaces, SavedFace } from "@/lib/utils/faces-db";
 import { scanBarcodeLocally } from "@/lib/utils/barcode";
@@ -85,6 +87,7 @@ export default function BlindHomePage() {
   } | null>(null);
   const [localGeoCache, setLocalGeoCache] = useState<GeoCacheEntry | null>(null);
   const [isSOSOpen, setIsSOSOpen] = useState(false);
+  const [isFallModalOpen, setIsFallModalOpen] = useState(false);
   const [isGuestModalOpen, setIsGuestModalOpen] = useState(false);
   const [userProfile, setUserProfile] = useState<any>({});
   const [permState, setPermState] = useState<"idle" | "requesting" | "granted" | "denied">("idle");
@@ -123,6 +126,11 @@ export default function BlindHomePage() {
     isCharging
   } = useDeviceSensors({
     onShake: () => {
+      if (isFallModalOpen) {
+        setIsFallModalOpen(false);
+        speak("الحمد لله على سلامتك، تم إلغاء نداء الاستغاثة.");
+        return;
+      }
       if (permState === "granted" && !analyzing) {
         triggerHaptic("medium");
         playChime(440, 0.2);
@@ -138,6 +146,14 @@ export default function BlindHomePage() {
       }
     }
   });
+
+  // ── Phase 2: Autonomous Fall Detection Engine (100% On-Device) ──
+  useEffect(() => {
+    const cleanup = globalFallDetector.init(() => {
+      setIsFallModalOpen(true);
+    });
+    return cleanup;
+  }, []);
 
   // ── Audio Compass Announcer ──────────────────────────────────
   const announceCompassDirection = useCallback(() => {
@@ -1497,6 +1513,15 @@ export default function BlindHomePage() {
         return;
       }
 
+      // 5c. Cancel fall alert voice command
+      if (/أنا بخير|انا بخير|سليم|الحمد لله|الحمدلله|إلغاء السقوط|الغاء السقوط|مفيش حاجة|مافيش حاجة/.test(lower)) {
+        if (isFallModalOpen) {
+          setIsFallModalOpen(false);
+          speak("الحمد لله على سلامتك، تم إلغاء نداء الاستغاثة.");
+          return;
+        }
+      }
+
       // 6. Stop speaking
       if (/اسكت|وقف|صمت|كفاية|بس/.test(lower)) {
         stopSpeaking();
@@ -2181,6 +2206,15 @@ export default function BlindHomePage() {
       <EmergencySOSModal
         isOpen={isSOSOpen}
         onClose={() => setIsSOSOpen(false)}
+        locationName={locationName}
+        emergencyPhone={userProfile?.emergencyPhone || ""}
+        guardianName={userProfile?.guardianName || ""}
+      />
+
+      {/* Autonomous Fall Alert Modal */}
+      <FallAlertModal
+        isOpen={isFallModalOpen}
+        onClose={() => setIsFallModalOpen(false)}
         locationName={locationName}
         emergencyPhone={userProfile?.emergencyPhone || ""}
         guardianName={userProfile?.guardianName || ""}
