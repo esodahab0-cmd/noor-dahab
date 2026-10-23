@@ -95,6 +95,7 @@ export default function BlindHomePage() {
   const [autoScanEnabled, setAutoScanEnabled] = useState(false);
   const [torchOn, setTorchOn] = useState(false);
   const [activeMode, setActiveMode] = useState<AnalysisMode>("general");
+  const [isAppInstalled, setIsAppInstalled] = useState(false);
 
   // Save Face Modal / Voice State
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
@@ -549,7 +550,33 @@ export default function BlindHomePage() {
     }
   };
 
-  // ── Hardware Keys Listener (Volume Buttons / Headsets) ───────
+  // ── Detect APK / Standalone Native Mode ─────────────────────
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const ua = window.navigator.userAgent || "";
+    const isCap =
+      typeof (window as any).Capacitor !== "undefined" ||
+      (window as any).Capacitor?.isNativePlatform?.() === true ||
+      window.location.protocol === "capacitor:" ||
+      window.location.protocol === "ionic:" ||
+      /Capacitor/i.test(ua);
+
+    const isWv =
+      /;\s*wv\)/i.test(ua) ||
+      (/Version\/4\.0/i.test(ua) && /Chrome/i.test(ua) && /Android/i.test(ua));
+
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true ||
+      document.referrer.includes("android-app://");
+
+    const isMarked =
+      localStorage.getItem("noor_app_installed") === "true" ||
+      localStorage.getItem("noor_pwa_installed") === "true" ||
+      localStorage.getItem("noor_dismissed_install") === "true";
+
+    setIsAppInstalled(isCap || isWv || isStandalone || isMarked);
+  }, []);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (
@@ -1180,9 +1207,10 @@ export default function BlindHomePage() {
   const lastTwoFingerTapTimeRef = useRef<number>(0);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // 1. If assistant is speaking, ANY touch immediately silences it for instant responsive control
-    if (isSpeaking) {
-      stopSpeaking();
+    // أثناء تحليل الصورة: نمنع أي لمس أو بدء تسجيل صوتي جديد حتى يكتمل التحليل وعرض النتيجة بالصوت
+    if (analyzing) {
+      triggerHaptic("light");
+      return;
     }
 
     clearTimeout(longPressTimerRef.current);
@@ -1202,6 +1230,7 @@ export default function BlindHomePage() {
 
     if (permState === "granted") {
       longPressTimerRef.current = setTimeout(() => {
+        if (analyzing) return;
         isLongPressRef.current = true;
         lastLongPressTriggerTimeRef.current = Date.now();
         triggerHaptic("medium");
@@ -1265,6 +1294,12 @@ export default function BlindHomePage() {
   };
 
   const handleCenterTap = () => {
+    // إذا كان التطبيق يقوم بتحليل الصورة الآن، ننتظر اكتمال التحليل والعرض بالصوت دون أي تداخل
+    if (analyzing) {
+      triggerHaptic("light");
+      return;
+    }
+
     // Prevent synthetic click collision after long press
     const timeSinceLongPress = Date.now() - lastLongPressTriggerTimeRef.current;
     if (isLongPressRef.current || timeSinceLongPress < 650) {
@@ -1318,8 +1353,8 @@ export default function BlindHomePage() {
 
   // ── Comprehensive Voice Assistant Command Processor ─────────
   const handleVoiceCommand = () => {
-    // Prevent multiple simultaneous listening sessions without audio feedback into the mic
-    if (isListening) {
+    // منع التداخل: لا نفتح الميكروفون إذا كان جاري تحليل صورة حالياً لتفادي أي خلل في الويب
+    if (analyzing || isListening) {
       triggerHaptic("light");
       return;
     }
@@ -1902,18 +1937,20 @@ export default function BlindHomePage() {
 
       {/* Navigation Links - Additional Pages */}
       <div className="flex items-center justify-start sm:justify-center gap-1 px-2 py-1.5 bg-dark-900/90 border-b border-gray-800 overflow-x-auto no-scrollbar">
-        <button
-          onClick={() => {
-            playClickSound();
-            speak("تحميل تطبيق أندرويد الرسمي");
-            router.push("/download");
-          }}
-          className="px-2.5 py-1 bg-gradient-to-r from-amber-500/25 to-amber-600/25 text-amber-300 text-[11px] sm:text-xs font-black rounded-lg border border-amber-400/60 hover:bg-amber-500/40 active:scale-95 transition-all flex items-center gap-1 shrink-0 shadow-sm"
-          aria-label="تحميل تطبيق أندرويد الرسمي APK"
-        >
-          <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
-          <span>تحميل APK</span>
-        </button>
+        {!isAppInstalled && (
+          <button
+            onClick={() => {
+              playClickSound();
+              speak("تحميل تطبيق أندرويد الرسمي");
+              router.push("/download");
+            }}
+            className="px-2.5 py-1 bg-gradient-to-r from-amber-500/25 to-amber-600/25 text-amber-300 text-[11px] sm:text-xs font-black rounded-lg border border-amber-400/60 hover:bg-amber-500/40 active:scale-95 transition-all flex items-center gap-1 shrink-0 shadow-sm"
+            aria-label="تحميل تطبيق أندرويد الرسمي APK"
+          >
+            <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
+            <span>تحميل APK</span>
+          </button>
+        )}
         <button
           onClick={() => {
             playClickSound();

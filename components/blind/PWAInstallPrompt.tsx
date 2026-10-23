@@ -23,15 +23,33 @@ export function PWAInstallPrompt() {
     setMounted(true);
     if (typeof window === "undefined") return;
 
-    // 1. تحقق من وضع التثبيت (هل التطبيق مفتوح بالفعل كـ PWA مستقل؟)
-    const standalone =
+    // 1. تحقق من وضع التثبيت (هل التطبيق مفتوح بالفعل كـ APK أو PWA مستقل؟)
+    const ua = window.navigator.userAgent || "";
+    const isCapacitor =
+      typeof (window as any).Capacitor !== "undefined" ||
+      (window as any).Capacitor?.isNativePlatform?.() === true ||
+      window.location.protocol === "capacitor:" ||
+      window.location.protocol === "ionic:" ||
+      /Capacitor/i.test(ua);
+
+    const isAndroidWebView =
+      /;\s*wv\)/i.test(ua) ||
+      (/Version\/4\.0/i.test(ua) && /Chrome/i.test(ua) && /Android/i.test(ua));
+
+    const isStandaloneMode =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as any).standalone === true ||
       document.referrer.includes("android-app://");
-    setIsStandalone(standalone);
+
+    const isMarkedInstalled =
+      localStorage.getItem("noor_app_installed") === "true" ||
+      localStorage.getItem("noor_pwa_installed") === "true" ||
+      localStorage.getItem("noor_dismissed_install") === "true";
+
+    const alreadyInApp = isCapacitor || isAndroidWebView || isStandaloneMode || isMarkedInstalled;
+    setIsStandalone(alreadyInApp);
 
     // 2. كشف نظام iOS و In-App Browsers
-    const ua = window.navigator.userAgent || "";
     const isAppleDevice = /iPad|iPhone|iPod/.test(ua) && !(window as any).MSStream;
     const inApp = /FBAN|FBAV|Instagram|WhatsApp|Line|Messenger|Snapchat/i.test(ua);
     setIsIOS(isAppleDevice);
@@ -195,6 +213,19 @@ export function PWAInstallPrompt() {
           >
             <span>APK</span>
           </a>
+          <button
+            onClick={() => {
+              try {
+                localStorage.setItem("noor_dismissed_install", "true");
+              } catch {}
+              setIsStandalone(true);
+            }}
+            className="p-2 text-gray-400 hover:text-white bg-dark-800 hover:bg-dark-700 rounded-xl border border-gray-700/80 transition-all"
+            aria-label="إغلاق تنبيه التثبيت"
+            title="إغلاق"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
