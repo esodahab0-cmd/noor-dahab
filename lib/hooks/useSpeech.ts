@@ -111,6 +111,15 @@ export function useSpeech() {
   // High-Quality Arabic Voice via Audio Stream with WebSpeech Fallback
   const speak = useCallback((text: string, onEnd?: () => void) => {
     if (!text || !text.trim()) return;
+
+    // Immediately cancel any active speech recognition so microphone NEVER picks up the TTS speaker voice
+    shouldKeepListeningRef.current = false;
+    if (recRef.current) {
+      try { recRef.current.abort(); } catch {}
+      recRef.current = null;
+    }
+    setIsListening(false);
+
     stopSpeaking();
     prepareAudioEngine();
 
@@ -227,6 +236,10 @@ export function useSpeech() {
         };
 
         rec.onerror = (e: any) => {
+          if (e.error === "aborted") {
+            setIsListening(false);
+            return;
+          }
           console.warn("Speech recognition error:", e.error);
           if (e.error === "not-allowed" || e.error === "service-not-allowed") {
             shouldKeepListeningRef.current = false;
@@ -274,13 +287,15 @@ export function useSpeech() {
     stopSpeaking();
     prepareAudioEngine();
     playChime(880, 0.12);
-    setTimeout(initRecognizer, 150);
+    // 220ms ensures chime audio tone has completed before mic opens
+    setTimeout(initRecognizer, 220);
   }, [speak, stopSpeaking, prepareAudioEngine, playChime]);
 
   const stopListening = useCallback(() => {
     shouldKeepListeningRef.current = false;
     if (recRef.current) {
-      try { recRef.current.stop(); } catch {}
+      try { recRef.current.abort(); } catch {}
+      recRef.current = null;
     }
     setIsListening(false);
   }, []);

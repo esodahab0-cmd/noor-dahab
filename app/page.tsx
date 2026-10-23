@@ -52,6 +52,7 @@ export default function BlindHomePage() {
   const autoScanTimerRef = useRef<any>(null);
   const longPressTimerRef = useRef<any>(null);
   const isLongPressRef = useRef(false);
+  const lastLongPressTriggerTimeRef = useRef(0);
   const lastDescriptionRef = useRef<string>("أهلاً بك في نور دهب. المس الشاشة في أي مكان وتحدث بحرية لطلب ما تريد أو طرح أي سؤال، أو المس مرتين سريعتين للوصف المباشر.");
 
   const {
@@ -1166,11 +1167,13 @@ export default function BlindHomePage() {
   const lastTwoFingerTapTimeRef = useRef<number>(0);
 
   const handlePointerDown = (e: React.PointerEvent) => {
-    // Prevent multiple simultaneous touches
-    if (isLongPressRef.current) return;
+    // 1. If assistant is speaking, ANY touch immediately silences it for instant responsive control
+    if (isSpeaking) {
+      stopSpeaking();
+    }
 
-    isLongPressRef.current = false;
     clearTimeout(longPressTimerRef.current);
+    isLongPressRef.current = false;
 
     // Two-finger double tap = Stop speaking immediately
     if (e.isPrimary === false) {
@@ -1187,18 +1190,20 @@ export default function BlindHomePage() {
     if (permState === "granted") {
       longPressTimerRef.current = setTimeout(() => {
         isLongPressRef.current = true;
+        lastLongPressTriggerTimeRef.current = Date.now();
         triggerHaptic("medium");
         handleVoiceCommand();
-      }, 550);
+      }, 500);
     }
   };
 
   const handlePointerUp = () => {
     clearTimeout(longPressTimerRef.current);
-    // Reset long press flag after a short delay to prevent immediate re-trigger
-    setTimeout(() => {
-      isLongPressRef.current = false;
-    }, 100);
+  };
+
+  const handlePointerCancel = () => {
+    clearTimeout(longPressTimerRef.current);
+    isLongPressRef.current = false;
   };
 
   // ── Conversational & Knowledge AI (الرد الصوتي على الأسئلة المعرفية والعلمية دون كاميرا) ──
@@ -1247,12 +1252,29 @@ export default function BlindHomePage() {
   };
 
   const handleCenterTap = () => {
-    if (isLongPressRef.current) return;
+    // Prevent synthetic click collision after long press
+    const timeSinceLongPress = Date.now() - lastLongPressTriggerTimeRef.current;
+    if (isLongPressRef.current || timeSinceLongPress < 650) {
+      isLongPressRef.current = false;
+      return;
+    }
+
     if (!isAudioUnlocked) unlockSpeaker();
     if (permState !== "granted") {
       requestPermissions();
       return;
     }
+
+    // If already in listening mode, do NOT restart listening or speak into the microphone
+    if (isListening) {
+      triggerHaptic("light");
+      return;
+    }
+
+    if (isSpeaking) {
+      stopSpeaking();
+    }
+
     tapCountRef.current += 1;
     clearTimeout(tapTimerRef.current);
 
@@ -1283,9 +1305,9 @@ export default function BlindHomePage() {
 
   // ── Comprehensive Voice Assistant Command Processor ─────────
   const handleVoiceCommand = () => {
-    // Prevent multiple simultaneous listening sessions
+    // Prevent multiple simultaneous listening sessions without audio feedback into the mic
     if (isListening) {
-      speak("أنا أسمعك بالفعل. تفضل بالتحدث.");
+      triggerHaptic("light");
       return;
     }
 
@@ -2000,7 +2022,8 @@ export default function BlindHomePage() {
           tabIndex={0}
           onPointerDown={handlePointerDown}
           onPointerUp={handlePointerUp}
-          onPointerLeave={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          onPointerLeave={handlePointerCancel}
           onClick={handleCenterTap}
           aria-label="نقرة للوصف • ضغط مطول للتحدث • أزرار الصوت للتصوير • 4 نقرات للطوارئ"
           className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform"
