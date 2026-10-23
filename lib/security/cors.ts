@@ -6,6 +6,9 @@ const ALLOWED_ORIGINS = new Set([
   "https://www.dahabsoftware.online",
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  "http://localhost",
+  "https://localhost",
+  "capacitor://localhost",
 ]);
 
 /**
@@ -16,12 +19,14 @@ export function validateOrigin(request: NextRequest): boolean {
   const origin = request.headers.get("origin");
   const referer = request.headers.get("referer");
   const secFetchSite = request.headers.get("sec-fetch-site");
+  const secFetchDest = request.headers.get("sec-fetch-dest");
+  const host = request.headers.get("host");
 
   // 1. Direct origin match
   if (origin) {
     if (ALLOWED_ORIGINS.has(origin)) return true;
-    // Allow vercel preview deployments
     if (origin.endsWith(".vercel.app") && origin.includes("noor-dahab")) return true;
+    if (origin.startsWith("capacitor://") || origin.startsWith("ionic://")) return true;
     return false;
   }
 
@@ -32,14 +37,28 @@ export function validateOrigin(request: NextRequest): boolean {
       const refOrigin = refUrl.origin;
       if (ALLOWED_ORIGINS.has(refOrigin)) return true;
       if (refOrigin.endsWith(".vercel.app") && refOrigin.includes("noor-dahab")) return true;
+      if (refOrigin.startsWith("capacitor://") || refOrigin.startsWith("ionic://")) return true;
       return false;
     } catch {
       return false;
     }
   }
 
-  // 3. Browser-internal same-origin fetch (when headers like origin/referer might be omitted)
+  // 3. Audio/Media streaming requests: <audio> tags or new Audio() do not send Origin header
+  if (secFetchDest === "audio" || secFetchDest === "video" || request.nextUrl.pathname.startsWith("/api/ai/tts")) {
+    // If request is directed to the current host or dahabsoftware, allow playback
+    if (!host || host.includes("dahabsoftware.online") || host.includes("localhost") || host === request.nextUrl.host) {
+      return true;
+    }
+  }
+
+  // 4. Browser-internal same-origin fetch (when headers like origin/referer might be omitted)
   if (secFetchSite === "same-origin" || secFetchSite === "same-site") {
+    return true;
+  }
+
+  // 5. Same-host fallback
+  if (host && (host === request.nextUrl.host || host.includes("dahabsoftware.online") || host.includes("localhost"))) {
     return true;
   }
 

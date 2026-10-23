@@ -121,6 +121,7 @@ export function useSpeech() {
     setIsListening(false);
 
     stopSpeaking();
+    setIsSpeaking(true);
     prepareAudioEngine();
 
     const cleanText = text.trim();
@@ -166,8 +167,9 @@ export function useSpeech() {
     }
     try {
       const synth = window.speechSynthesis;
-      if (synth.paused) synth.resume();
-      synth.cancel();
+      if (synth.speaking || synth.pending) {
+        synth.cancel();
+      }
 
       const utt = new SpeechSynthesisUtterance(text);
       utt.lang = "ar-EG";
@@ -186,7 +188,15 @@ export function useSpeech() {
       };
       utt.onerror = () => setIsSpeaking(false);
 
-      synth.speak(utt);
+      // Brief 30ms timeout prevents Android Chrome from dropping speak calls right after cancel()
+      setTimeout(() => {
+        try {
+          if (synth.paused) synth.resume();
+          synth.speak(utt);
+        } catch {
+          setIsSpeaking(false);
+        }
+      }, 30);
     } catch (e) {
       setIsSpeaking(false);
     }
@@ -285,6 +295,7 @@ export function useSpeech() {
     };
 
     stopSpeaking();
+    setIsSpeaking(true);
     prepareAudioEngine();
     playChime(880, 0.12);
     // 220ms ensures chime audio tone has completed before mic opens

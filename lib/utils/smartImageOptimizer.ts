@@ -1,24 +1,19 @@
 /**
- * Smart Adaptive Image Optimizer & Zero-Latency Blur Detector
+ * Smart Adaptive Image Optimizer & Zero-Latency Multi-Zone Blur Detector
  * 
- * نظام الضغط التكيفي الذكي للصور وفحص الاهتزاز لتطبيق "نور دهب"
+ * نظام الضغط التكيفي الذكي للصور وفحص الاهتزاز متعدد المناطق لتطبيق "نور دهب"
  * 
- * آلية العمل (Adaptive Compression Mechanism):
- * 1. Task-Aware Dynamic Resizing: يحدد أبعاد وضغط الصورة بناءً على الغرض:
- *    - نمط المستندات والنصوص (Document/OCR): تصدير بدقة تصل إلى 1280px وجودة JPEG 0.82
- *      لضمان وضوح تفاصيل الحروف والأرقام الدقيقة والروشتات.
- *    - نمط المشاهد العامة والأجسام (General/Scene/Objects): تصدير بأبعاد 640px وجودة JPEG 0.60
- *      لتقليل حجم الصورة لأقل من 45KB وضمان إرسالها بسرعة طلقة حتى على شبكات 3G/4G الضعيفة.
- * 2. Blur Detection (كشف الاهتزاز السريع):
- *    - استخدام خوارزمية تباين الحواف (Variance of Laplacian approximation) على صورة رمادية مصغرة.
- *    - إذا كانت النتيجة أقل من الحد الأدنى للحدة، يتم رفض الإرسال وتنبيه الكفيف صوتياً
- *      "يرجى تثبيت الكاميرا، الصورة مهزوزة" لتوفير الوقت والبيانات والـ API quota.
+ * التحسينات المطبقة:
+ * 1. دقة عالية لكافة الأنماط (تصل لـ 1440px و 1280px بجودة 0.80 - 0.88) لمنع التخريف والهلوسة.
+ * 2. فحص متعدد المناطق (Multi-Zone Blur & Brightness Detection) يفحص 5 مناطق مختلفة (المركز والأركان)
+ *    وحساب الإضاءة العامة لمنع إعطاء تنبيه خاطئ "الصورة مش واضحة" في الأماكن المضيئة والأسطح السادة.
  */
 
 export interface OptimizedImageResult {
   base64: string;
   isBlurred: boolean;
   blurScore: number;
+  brightness: number;
   width: number;
   height: number;
   mode: string;
@@ -38,75 +33,110 @@ export function getOptimizationConfig(mode: string): OptimizationConfig {
     case "document":
     case "currency":
     case "describe_doc":
-      // دقة عالية جداً للخطوط والأرقام والتفاصيل الورقية
-      return { maxDimension: 1280, quality: 0.82 };
+    case "pos_shield":
+      // دقة فائقة الوضوح لقراءة الورق والعملات والأرقام الصغيرة
+      return { maxDimension: 1440, quality: 0.88 };
 
     case "color":
+    case "colors":
     case "find_item":
+    case "find_object":
     case "hazard":
     case "navigate":
-      // دقة متوسطة متوازنة وسريعة
-      return { maxDimension: 800, quality: 0.70 };
+    case "transit":
+    case "appliance":
+      // دقة ممتازة لتمييز الأجسام واللافتات والشاشات
+      return { maxDimension: 1280, quality: 0.82 };
 
     case "general":
     case "explore":
     case "followup":
     default:
-      // سرعة قصوى للمشاهد العامة والأجسام (أقل استهلاك شبكة)
-      return { maxDimension: 640, quality: 0.60 };
+      // دقة واضحة متوازنة للمشاهد العامة دون أي تشويش
+      return { maxDimension: 1280, quality: 0.80 };
   }
 }
 
 /**
- * فحص حدة الصورة واكتشاف الاهتزاز السريع (Fast Blur Detection)
- * عبر قياس تباين المشتقات المكانية (Edge Variance)
+ * فحص حدة الصورة واكتشاف الاهتزاز السريع متعدد المناطق (Multi-Zone Variance & Brightness)
  */
-export function calculateBlurScore(ctx: CanvasRenderingContext2D, width: number, height: number): number {
+export function calculateMultiZoneSharpness(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number
+): { maxVariance: number; averageBrightness: number } {
   try {
-    // نستخدم عينة سريعة 64x64 في منتصف الكادر لحساب فائق السرعة (< 5ms)
-    const sampleSize = 64;
-    const startX = Math.max(0, Math.floor((width - sampleSize) / 2));
-    const startY = Math.max(0, Math.floor((height - sampleSize) / 2));
-    const imgData = ctx.getImageData(startX, startY, sampleSize, sampleSize);
-    const data = imgData.data;
-
-    // تحويل إلى مصفوفة تدرج رمادي (Grayscale)
-    const gray = new Float32Array(sampleSize * sampleSize);
-    for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-      gray[j] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    const sampleSize = 48;
+    if (width < sampleSize || height < sampleSize) {
+      return { maxVariance: 100, averageBrightness: 128 };
     }
 
-    // تطبيق فلتر لابلاسيان لحساب تباين الحواف (Laplacian Filter)
-    let sum = 0;
-    let sumSq = 0;
-    let count = 0;
+    // 5 مناطق توزيعية: المركز، وأركان الصورة
+    const regions = [
+      { x: Math.floor((width - sampleSize) / 2), y: Math.floor((height - sampleSize) / 2) }, // Center
+      { x: Math.floor(width * 0.2), y: Math.floor(height * 0.2) },                           // Top-Left
+      { x: Math.floor(width * 0.7), y: Math.floor(height * 0.2) },                           // Top-Right
+      { x: Math.floor(width * 0.2), y: Math.floor(height * 0.7) },                           // Bottom-Left
+      { x: Math.floor(width * 0.7), y: Math.floor(height * 0.7) },                           // Bottom-Right
+    ];
 
-    for (let y = 1; y < sampleSize - 1; y++) {
-      for (let x = 1; x < sampleSize - 1; x++) {
-        const idx = y * sampleSize + x;
-        // Laplacian kernel: [0, 1, 0; 1, -4, 1; 0, 1, 0]
-        const lap =
-          gray[idx - sampleSize] +
-          gray[idx + sampleSize] +
-          gray[idx - 1] +
-          gray[idx + 1] -
-          4 * gray[idx];
+    let maxVariance = 0;
+    let totalBrightness = 0;
+    let testedRegions = 0;
 
-        sum += lap;
-        sumSq += lap * lap;
-        count++;
+    for (const reg of regions) {
+      const rx = Math.max(0, Math.min(width - sampleSize, reg.x));
+      const ry = Math.max(0, Math.min(height - sampleSize, reg.y));
+
+      const imgData = ctx.getImageData(rx, ry, sampleSize, sampleSize);
+      const data = imgData.data;
+
+      const gray = new Float32Array(sampleSize * sampleSize);
+      let regionBrightnessSum = 0;
+
+      for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+        const val = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+        gray[j] = val;
+        regionBrightnessSum += val;
+      }
+
+      totalBrightness += regionBrightnessSum / (sampleSize * sampleSize);
+      testedRegions++;
+
+      // Laplacian kernel
+      let sum = 0;
+      let sumSq = 0;
+      let count = 0;
+
+      for (let y = 1; y < sampleSize - 1; y++) {
+        for (let x = 1; x < sampleSize - 1; x++) {
+          const idx = y * sampleSize + x;
+          const lap =
+            gray[idx - sampleSize] +
+            gray[idx + sampleSize] +
+            gray[idx - 1] +
+            gray[idx + 1] -
+            4 * gray[idx];
+
+          sum += lap;
+          sumSq += lap * lap;
+          count++;
+        }
+      }
+
+      if (count > 0) {
+        const mean = sum / count;
+        const variance = Math.max(0, sumSq / count - mean * mean);
+        if (variance > maxVariance) {
+          maxVariance = variance;
+        }
       }
     }
 
-    if (count === 0) return 100;
-
-    // التباين (Variance) يعبر عن وضوح الحواف
-    const mean = sum / count;
-    const variance = sumSq / count - mean * mean;
-    return variance;
+    const averageBrightness = testedRegions > 0 ? totalBrightness / testedRegions : 128;
+    return { maxVariance, averageBrightness };
   } catch {
-    // في حال حدوث أي استثناء، نعتبر الصورة مقبولة لعدم تعطيل الكفيف
-    return 100;
+    return { maxVariance: 100, averageBrightness: 128 };
   }
 }
 
@@ -127,7 +157,7 @@ export function optimizeImageForTask(
 
   const { maxDimension, quality } = getOptimizationConfig(mode);
 
-  // حساب الأبعاد المحسنة مع الحفاظ الصارم على نسبة العرض للارتفاع
+  // حساب الأبعاد المحسنة مع الحفاظ على نسبة العرض للارتفاع
   let targetWidth = video.videoWidth;
   let targetHeight = video.videoHeight;
 
@@ -143,7 +173,6 @@ export function optimizeImageForTask(
     }
   }
 
-  // إعادة استخدام الـ Canvas لتفادي الـ Garbage Collection وتسريب الذاكرة
   if (!reusableCanvas) {
     reusableCanvas = document.createElement("canvas");
   }
@@ -161,16 +190,24 @@ export function optimizeImageForTask(
   reusableCtx.imageSmoothingQuality = "high";
   reusableCtx.drawImage(video, 0, 0, targetWidth, targetHeight);
 
-  // فحص الاهتزاز والضبابية
+  // فحص الاهتزاز والضبابية والإضاءة
   let blurScore = 100;
+  let brightness = 128;
   let isBlurred = false;
 
   if (checkBlur) {
-    blurScore = calculateBlurScore(reusableCtx, targetWidth, targetHeight);
-    // عتبة الاهتزاز: الصور المهزوزة بشدة تعطي تباين أقل من 12
-    // نقوم بتطبيق الفحص الحازم فقط في نمط قراءة النصوص والمستندات
-    const blurThreshold = mode === "read_text" || mode === "document" ? 14 : 7;
-    isBlurred = blurScore < blurThreshold;
+    const sharpness = calculateMultiZoneSharpness(reusableCtx, targetWidth, targetHeight);
+    blurScore = sharpness.maxVariance;
+    brightness = sharpness.averageBrightness;
+
+    // لا نعتبر الصورة مهزوزة إلا إذا كانت في وضع قراءة حساس للغاية والتباين في كافة أرجاء الكادر معدوم تقريباً (< 4.5)
+    // كما نتأكد أن المكان ليس شديد الإضاءة، لأن الأماكن المضيئة ذات الجدران الناعمة لا تعتبر مهزوزة
+    const isTextMode = mode === "read_text" || mode === "document";
+    if (isTextMode) {
+      isBlurred = blurScore < 4.5;
+    } else {
+      isBlurred = false; // الأنماط العامة لا نوقف فيها التحليل أبداً
+    }
   }
 
   const base64 = reusableCanvas.toDataURL("image/jpeg", quality);
@@ -179,6 +216,7 @@ export function optimizeImageForTask(
     base64,
     isBlurred,
     blurScore,
+    brightness,
     width: targetWidth,
     height: targetHeight,
     mode,

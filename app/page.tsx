@@ -103,6 +103,7 @@ export default function BlindHomePage() {
   const [savedFaces, setSavedFaces] = useState<SavedFace[]>([]);
   const handleVoiceCommandRef = useRef<() => void>(() => {});
   const lastRadarWarningTimeRef = useRef<number>(0);
+  const lastAnalysisSpokenTimeRef = useRef<number>(0);
 
   // Description Session History (Last 10 descriptions)
   const [descriptionHistory, setDescriptionHistory] = useState<string[]>([]);
@@ -190,8 +191,8 @@ export default function BlindHomePage() {
     if (!cameraReady) return;
 
     const radarTimer = setInterval(() => {
-      // Avoid interrupting companion mode, active speech, or listening sessions
-      if (!videoRef.current || analyzing || isListening || isSpeaking || companionMode) return;
+      // Avoid interrupting companion mode, active speech, listening sessions, or recent AI scene description
+      if (!videoRef.current || analyzing || isListening || isSpeaking || companionMode || (Date.now() - lastAnalysisSpokenTimeRef.current < 4500)) return;
       const res = analyzeFrameForHazards(videoRef.current);
       if (res.hazardDetected) {
         const now = Date.now();
@@ -222,7 +223,7 @@ export default function BlindHomePage() {
     }
 
     const docTimer = setInterval(() => {
-      if (!videoRef.current || analyzing || isListening || isSpeaking || isAutoCapturingDocRef.current) return;
+      if (!videoRef.current || analyzing || isListening || isSpeaking || isAutoCapturingDocRef.current || (Date.now() - lastAnalysisSpokenTimeRef.current < 4500)) return;
 
       const framing = analyzeDocumentFraming(videoRef.current);
       setDocGuidanceMessage(framing.messageAr);
@@ -438,6 +439,17 @@ export default function BlindHomePage() {
     }
 
     streamRef.current = stream;
+
+    // Apply continuous autofocus if supported by mobile hardware
+    try {
+      const track = stream.getVideoTracks()[0];
+      const capabilities = (track?.getCapabilities?.() || {}) as any;
+      if (capabilities?.focusMode && Array.isArray(capabilities.focusMode) && capabilities.focusMode.includes("continuous")) {
+        (track as any).applyConstraints({
+          advanced: [{ focusMode: "continuous" }]
+        }).catch(() => {});
+      }
+    } catch {}
 
     if (videoRef.current) {
       const vid = videoRef.current;
@@ -1093,6 +1105,7 @@ export default function BlindHomePage() {
       lastDescriptionRef.current = fullText;
       setDescriptionHistory(prev => [...prev.slice(-9), fullText]);
       historyIndexRef.current = -1;
+      lastAnalysisSpokenTimeRef.current = Date.now();
       setCurrentResult(fullText);
       speak(fullText);
 
@@ -1888,17 +1901,17 @@ export default function BlindHomePage() {
       <PWAInstallPrompt />
 
       {/* Navigation Links - Additional Pages */}
-      <div className="flex items-center justify-center gap-1.5 px-3 py-2 bg-dark-900/80 border-b border-gray-800 overflow-x-auto no-scrollbar">
+      <div className="flex items-center justify-start sm:justify-center gap-1 px-2 py-1.5 bg-dark-900/90 border-b border-gray-800 overflow-x-auto no-scrollbar">
         <button
           onClick={() => {
             playClickSound();
             speak("تحميل تطبيق أندرويد الرسمي");
             router.push("/download");
           }}
-          className="px-3 py-1.5 bg-gradient-to-r from-amber-500/25 to-amber-600/25 text-amber-300 text-xs font-black rounded-lg border border-amber-400/60 hover:bg-amber-500/40 active:scale-95 transition-all flex items-center gap-1 shrink-0 shadow-sm"
+          className="px-2.5 py-1 bg-gradient-to-r from-amber-500/25 to-amber-600/25 text-amber-300 text-[11px] sm:text-xs font-black rounded-lg border border-amber-400/60 hover:bg-amber-500/40 active:scale-95 transition-all flex items-center gap-1 shrink-0 shadow-sm"
           aria-label="تحميل تطبيق أندرويد الرسمي APK"
         >
-          <Download className="w-3.5 h-3.5" />
+          <Download className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
           <span>تحميل APK</span>
         </button>
         <button
@@ -1907,7 +1920,7 @@ export default function BlindHomePage() {
             speak("كيف يعمل");
             router.push("/how-it-works");
           }}
-          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          className="px-2.5 py-1 bg-dark-800 text-gold-300 text-[11px] sm:text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all shrink-0"
           aria-label="كيف يعمل التطبيق - شرح كيفية استخدام نور دهب"
         >
           كيف يعمل
@@ -1918,7 +1931,7 @@ export default function BlindHomePage() {
             speak("عن المشروع");
             router.push("/about");
           }}
-          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          className="px-2.5 py-1 bg-dark-800 text-gold-300 text-[11px] sm:text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all shrink-0"
           aria-label="عن المشروع - معلومات عن المهندس إسلام أبو دهب ودهب سوفتوير"
         >
           عن المشروع
@@ -1929,7 +1942,7 @@ export default function BlindHomePage() {
             speak("سياسة الخصوصية");
             router.push("/privacy");
           }}
-          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          className="px-2.5 py-1 bg-dark-800 text-gold-300 text-[11px] sm:text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all shrink-0"
           aria-label="سياسة الخصوصية - كيف نحمي بياناتك الكاميرا والميكروفون والموقع"
         >
           الخصوصية
@@ -1940,7 +1953,7 @@ export default function BlindHomePage() {
             speak("شروط الاستخدام");
             router.push("/terms");
           }}
-          className="px-3 py-1.5 bg-dark-800 text-gold-300 text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all"
+          className="px-2.5 py-1 bg-dark-800 text-gold-300 text-[11px] sm:text-xs font-bold rounded-lg border border-gold-500/30 hover:bg-dark-700 active:scale-95 transition-all shrink-0"
           aria-label="شروط الاستخدام - قواعد وإرشادات استخدام التطبيق"
         >
           الشروط
@@ -2029,23 +2042,23 @@ export default function BlindHomePage() {
           className="relative z-10 flex-1 flex flex-col items-center justify-center p-4 text-center cursor-pointer outline-none active:scale-98 transition-transform"
           style={{ touchAction: "manipulation" }}
         >
-          <div className={`w-28 h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-3 ${
+          <div className={`w-20 h-20 sm:w-24 sm:h-24 md:w-28 md:h-28 rounded-full border-4 flex items-center justify-center shadow-2xl mb-2 sm:mb-3 transition-all ${
             analyzing ? "border-blue-400 bg-blue-500/30"
             : isListening ? "border-red-400 bg-red-500/30 animate-pulse"
             : (activeMode === "read_text" && docGuidanceMessage) ? "border-amber-400 bg-amber-500/20 animate-pulse"
             : "border-gold-400 bg-gold-500/30 gold-glow"
           }`}>
             {analyzing
-              ? <RefreshCw className="w-12 h-12 text-blue-300 animate-spin" />
+              ? <RefreshCw className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-blue-300 animate-spin" />
               : isListening
-              ? <Mic className="w-12 h-12 text-red-400 animate-bounce" />
+              ? <Mic className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-red-400 animate-bounce" />
               : (activeMode === "read_text" && docGuidanceMessage)
-              ? <FileText className="w-12 h-12 text-amber-300 animate-pulse" />
-              : <Eye className="w-12 h-12 text-gold-400 animate-pulse" />
+              ? <FileText className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-amber-300 animate-pulse" />
+              : <Eye className="w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 text-gold-400 animate-pulse" />
             }
           </div>
 
-          <p className="text-lg font-black text-white max-w-sm leading-relaxed px-4 py-2 bg-black/85 rounded-2xl border border-gold-500/30 text-center shadow-lg">
+          <p className="text-sm sm:text-base md:text-lg font-black text-white max-w-sm leading-relaxed px-3.5 py-1.5 sm:px-4 sm:py-2 bg-black/85 rounded-2xl border border-gold-500/30 text-center shadow-lg">
             {isLightMeterOn
               ? `💡 كاشف النور: ${currentLightDesc || "يصدر رنيناً صوتياً حسب شدة الضوء"}`
               : analyzing
@@ -2057,7 +2070,7 @@ export default function BlindHomePage() {
               : currentResult}
           </p>
 
-          <span className="mt-2 text-[11px] font-bold text-gold-300/90 bg-black/70 px-3 py-1 rounded-full border border-white/10">
+          <span className="mt-1.5 text-[10px] sm:text-[11px] font-bold text-gold-300/90 bg-black/70 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full border border-white/10">
             {activeMode === "read_text"
               ? "وضع القراءة • وجّه الورقة والكاميرا ستلتقط تلقائياً"
               : "نقرة للوصف • ضغط مطول للتحدث • أزرار الصوت للتصوير"}
