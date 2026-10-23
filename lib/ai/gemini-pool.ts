@@ -1,4 +1,4 @@
-﻿// SERVER-ONLY PROTECTION: Prevent leaking raw API keys into client bundles
+// SERVER-ONLY PROTECTION: Prevent leaking raw API keys into client bundles
 if (typeof window !== "undefined") {
   throw new Error("SECURITY VIOLATION: Gemini key pool cannot be loaded on the client side.");
 }
@@ -18,12 +18,10 @@ export function getGeminiPoolCount(): number {
 }
 
 // Active & Supported Gemini models with automated failover
-// Priority: gemini-flash-latest & lite are stable workhorses, then gemini-3.6/3.8
+// Priority: gemini-flash-lite-latest provides sub-second (<700ms) ultra-fast responses
 const ACTIVE_MODELS = [
-  "gemini-flash-latest",
   "gemini-flash-lite-latest",
-  "gemini-3.6-flash",
-  "gemini-3.8-flash"
+  "gemini-3.6-flash"
 ];
 
 let currentKeyIndex = 0;

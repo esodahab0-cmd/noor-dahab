@@ -182,8 +182,8 @@ export async function processVisionWithFallback(
   const prompt = req.customPrompt || buildSystemPrompt(mode, req.locationInfo, undefined, req.userQuestion);
   const attempted: string[] = [];
 
-  // ── High Accuracy Specialized Modes (الأدوية والتحليل الدقيق): OpenRouter Qwen 2.5 VL 72B ──
-  const isSpecializedPrecisionMode = mode === "medication" || mode === "read_text" || mode === "appliance";
+  // ── High Accuracy Specialized Modes (الأدوية المعقدة فقط): OpenRouter Qwen 2.5 VL 72B ──
+  const isSpecializedPrecisionMode = mode === "medication";
   if (isSpecializedPrecisionMode && canExecuteProvider("openrouter")) {
     try {
       attempted.push("OpenRouter Qwen 2.5 VL 72B (Specialized Precision Tier 🎯)");

@@ -1304,14 +1304,14 @@ export default function BlindHomePage() {
       const count = tapCountRef.current;
       tapCountRef.current = 0;
 
-      // نقرتان سريعتان (Double Tap) = تصوير ووصف المشهد فوري بالكاميرا
-      if (count >= 2) {
+      // نقرة واحدة (Single Tap) = تصوير ووصف المشهد فوراً بالكاميرا
+      // الضغط المطول (Long Press) = التحدث وسؤال الذكاء الاصطناعي بالصوت
+      if (count === 1) {
         triggerHaptic("medium");
         handleAnalyze(activeMode);
-      } else {
-        // نقرة واحدة (Single Tap) = المساعد الصوتي يستمع لطلب الكفيف أولاً!
-        triggerHaptic("light");
-        handleVoiceCommand();
+      } else if (count >= 2) {
+        triggerHaptic("medium");
+        handleAnalyze(activeMode);
       }
     }, 280);
   };

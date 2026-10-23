@@ -1,4 +1,4 @@
-﻿// =========================================================================
+// =========================================================================
 // Noor Dahab — OpenRouter Vision Engine (Qwen 2.5 VL 72B & Deep Analysis)
 // مخصص لتحليل الأدوية بدقة فائقة وقراءة التفاصيل المعقدة للمكفوفين
 // =========================================================================
@@ -61,7 +61,7 @@ export async function analyzeWithOpenRouter(
       "HTTP-Referer": "https://dahabsoftware.online",
       "X-Title": "Noor Dahab AI Blind Assistant",
     },
-    signal: AbortSignal.timeout(12000),
+    signal: AbortSignal.timeout(6000),
     body: JSON.stringify({
       model: modelName,
       max_tokens: 1200,
